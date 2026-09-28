@@ -11,12 +11,16 @@ conda activate langchain
 export PYTHONPATH="$PROJECT_DIR/src"
 mkdir -p "$PROJECT_DIR/data/logs"
 
-# 清理本项目自身的残留后端进程（仅 8002；控制台 8001 不清理）
+# 仅当 8002 上的后端不健康时才清理（健康运行则保留）
 pid="$(lsof -ti :8002 -sTCP:LISTEN -P -n 2>/dev/null || true)"
-if [ -n "$pid" ] && ps -p "$pid" -o command= 2>/dev/null | grep -q "graphrag.api.main"; then
-  echo "清理旧的 RAG 系统进程 (PID $pid)"
-  kill "$pid" 2>/dev/null
-  sleep 1
+if [ -n "$pid" ]; then
+  if curl -sf http://localhost:8002/api/health >/dev/null 2>&1; then
+    echo "问答系统正在运行，保持现状"
+  elif ps -p "$pid" -o command= 2>/dev/null | grep -q "graphrag.api.main"; then
+    echo "清理异常的 RAG 系统进程 (PID $pid)"
+    kill "$pid" 2>/dev/null
+    sleep 1
+  fi
 fi
 
 # 若控制台已在运行，直接打开浏览器

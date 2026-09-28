@@ -6,72 +6,92 @@
   <title>GraphRAG 控制台</title>
   <style>
     * { box-sizing: border-box; }
-    body { margin: 0; font-family: -apple-system, "PingFang SC", "Microsoft YaHei", sans-serif; background: #f3f4f6; color: #1f2937; }
-    .wrap { max-width: 760px; margin: 0 auto; padding: 24px; }
-    h1 { font-size: 20px; margin: 0 0 4px; }
-    .sub { color: #6b7280; font-size: 13px; margin-bottom: 20px; }
-    .card { background: #fff; border-radius: 10px; padding: 18px; margin-bottom: 16px; box-shadow: 0 1px 3px rgba(0,0,0,.06); }
-    .card h2 { font-size: 15px; margin: 0 0 12px; color: #374151; }
-    .status-row { display: flex; align-items: center; gap: 10px; font-size: 14px; }
-    .dot { width: 10px; height: 10px; border-radius: 50%; background: #9ca3af; }
-    .dot.running { background: #22c55e; }
-    .meta { color: #6b7280; font-size: 12px; margin-top: 8px; }
-    label { display: block; font-size: 13px; color: #374151; margin: 10px 0 4px; }
-    input[type=text], input[type=password] { width: 100%; padding: 9px 11px; border: 1px solid #d1d5db; border-radius: 6px; font-size: 14px; }
-    .btns { display: flex; flex-wrap: wrap; gap: 10px; margin-top: 16px; }
-    button { border: none; border-radius: 6px; padding: 9px 18px; font-size: 14px; cursor: pointer; }
-    .primary { background: #2563eb; color: #fff; }
-    .success { background: #16a34a; color: #fff; }
-    .danger { background: #dc2626; color: #fff; }
-    .ghost { background: #f3f4f6; color: #374151; border: 1px solid #d1d5db; }
-    button:disabled { opacity: .55; cursor: not-allowed; }
-    #msg { margin-top: 10px; font-size: 13px; min-height: 18px; }
+    body { margin: 0; font-family: -apple-system, "PingFang SC", "Microsoft YaHei", sans-serif; background: #f1f5f9; color: #0f172a; font-size: 14px; line-height: 1.6; }
+    .layout { display: flex; min-height: 100vh; }
+    .sidebar { width: 220px; flex-shrink: 0; background: linear-gradient(180deg, #111c33 0%, #0f172a 100%); color: #cbd5e1; padding: 20px 14px; position: sticky; top: 0; height: 100vh; }
+    .brand { display: flex; align-items: center; gap: 10px; padding: 0 10px 18px; border-bottom: 1px solid rgba(148,163,184,.15); }
+    .logo { width: 34px; height: 34px; border-radius: 9px; background: linear-gradient(135deg, #6366f1, #8b5cf6); display: flex; align-items: center; justify-content: center; color: #fff; font-weight: 700; font-size: 16px; }
+    .brand .t1 { color: #fff; font-size: 15px; font-weight: 600; }
+    .brand .t2 { color: #64748b; font-size: 11px; }
+    .nav-label { padding: 8px 12px; border-radius: 8px; font-size: 13.5px; }
+    .nav-label.active { background: #4f46e5; color: #fff; }
+    .nav-label.muted { color: #64748b; }
+    .main { flex: 1; padding: 28px 32px; max-width: 980px; }
+    h1 { font-size: 22px; font-weight: 700; margin: 0 0 4px; }
+    .desc { color: #475569; margin: 0 0 20px; font-size: 13.5px; }
+    .card { background: #fff; border: 1px solid #e2e8f0; border-radius: 12px; box-shadow: 0 1px 3px rgba(15,23,42,.08); padding: 20px; margin-bottom: 16px; }
+    .card h2 { font-size: 15px; font-weight: 600; margin: 0 0 12px; }
+    .status-row { display: flex; align-items: center; gap: 10px; font-size: 14px; font-weight: 500; }
+    .dot { width: 10px; height: 10px; border-radius: 50%; background: #94a3b8; }
+    .dot.running { background: #22c55e; box-shadow: 0 0 0 4px rgba(34,197,94,.15); }
+    .meta { color: #64748b; font-size: 12.5px; margin-top: 8px; }
+    .btn-row { display: flex; flex-wrap: wrap; gap: 10px; margin-top: 16px; }
+    .btn { border: none; border-radius: 8px; padding: 9px 18px; font-size: 13.5px; cursor: pointer; font-weight: 500; }
+    .btn:disabled { opacity: .55; cursor: not-allowed; }
+    .btn-success { background: #16a34a; color: #fff; }
+    .btn-danger { background: #dc2626; color: #fff; }
+    .btn-ghost { background: #fff; color: #475569; border: 1px solid #e2e8f0; }
+    .btn-primary { background: #4f46e5; color: #fff; }
+    label { display: block; font-size: 13px; color: #475569; margin: 12px 0 6px; font-weight: 500; }
+    input[type=text], input[type=password] { width: 100%; padding: 9px 12px; border: 1px solid #e2e8f0; border-radius: 8px; font-size: 14px; outline: none; }
+    input:focus { border-color: #4f46e5; box-shadow: 0 0 0 3px rgba(79,70,229,.12); }
+    .hint { color: #94a3b8; font-size: 12px; margin-top: 4px; }
+    #msg { margin-top: 12px; font-size: 13px; min-height: 18px; }
     #msg.ok { color: #16a34a; }
     #msg.err { color: #dc2626; }
-    pre { background: #111827; color: #d1d5db; border-radius: 8px; padding: 12px; font-size: 12px; line-height: 1.5; height: 240px; overflow-y: auto; white-space: pre-wrap; word-break: break-all; }
-    .hint { color: #9ca3af; font-size: 12px; margin-top: 4px; }
+    pre { background: #0f172a; color: #cbd5e1; border-radius: 10px; padding: 14px; font-size: 12px; line-height: 1.5; height: 260px; overflow-y: auto; white-space: pre-wrap; word-break: break-all; margin: 0; }
   </style>
 </head>
 <body>
-  <div class="wrap">
-    <h1>GraphRAG 控制台</h1>
-    <div class="sub">在此配置 LLM 并一键启停系统。系统运行后点击「打开系统」进入问答界面。</div>
-
-    <div class="card">
-      <h2>系统状态</h2>
-      <div class="status-row">
-        <span id="dot" class="dot"></span>
-        <span id="statusText">检测中…</span>
+  <div class="layout">
+    <aside class="sidebar">
+      <div class="brand">
+        <div class="logo">G</div>
+        <div>
+          <div class="t1">GraphRAG 控制台</div>
+          <div class="t2">LLM 配置与启停</div>
+        </div>
       </div>
-      <div class="meta" id="statusMeta"></div>
-      <div class="btns">
-        <button class="success" id="btnStart" onclick="startSys()">启动系统</button>
-        <button class="danger" id="btnStop" onclick="stopSys()">停止系统</button>
-        <button class="ghost" id="btnRestart" onclick="restartSys()">重启</button>
-        <button class="ghost" id="btnOpen" onclick="openApp()">打开系统 →</button>
-        <button class="ghost" onclick="quitAll()">退出控制台</button>
+      <div style="margin-top:14px;display:flex;flex-direction:column;gap:2px">
+        <div class="nav-label active">系统控制</div>
+        <a class="nav-label muted" href="http://localhost:8002" target="_blank" style="text-decoration:none">问答系统 →</a>
       </div>
-      <div id="msg"></div>
-    </div>
+    </aside>
+    <main class="main">
+      <h1>系统控制</h1>
+      <p class="desc">配置 LLM 并一键启动 / 停止问答系统。配置保存后立即生效。</p>
 
-    <div class="card">
-      <h2>LLM 配置</h2>
-      <label>请求地址 base_url（OpenAI 兼容端点）</label>
-      <input type="text" id="baseUrl" placeholder="https://xxx/v1" />
-      <label>API Key</label>
-      <input type="password" id="apiKey" placeholder="留空表示保持不变" autocomplete="off" />
-      <div class="hint" id="keyHint"></div>
-      <label>模型名称</label>
-      <input type="text" id="model" placeholder="例如 gpt-4o-mini / deepseek-chat / qwen-max" />
-      <div class="btns">
-        <button class="primary" onclick="saveSettings()">保存设置</button>
+      <div class="card">
+        <h2>系统状态</h2>
+        <div class="status-row"><span id="dot" class="dot"></span><span id="statusText">检测中…</span></div>
+        <div class="meta" id="statusMeta"></div>
+        <div class="btn-row">
+          <button class="btn btn-success" id="btnStart" onclick="startSys()">启动系统</button>
+          <button class="btn btn-danger" id="btnStop" onclick="stopSys()">停止系统</button>
+          <button class="btn btn-ghost" id="btnRestart" onclick="restartSys()">重启</button>
+          <button class="btn btn-primary" id="btnOpen" onclick="openApp()">打开问答系统 →</button>
+          <button class="btn btn-ghost" onclick="quitAll()">退出控制台</button>
+        </div>
+        <div id="msg"></div>
       </div>
-    </div>
 
-    <div class="card">
-      <h2>后端日志</h2>
-      <pre id="logs">（暂无日志）</pre>
-    </div>
+      <div class="card">
+        <h2>LLM 配置</h2>
+        <label>请求地址 base_url</label>
+        <input type="text" id="baseUrl" placeholder="https://xxx/v1" />
+        <label>API Key</label>
+        <input type="password" id="apiKey" placeholder="留空表示保持不变" autocomplete="off" />
+        <div class="hint" id="keyHint"></div>
+        <label>模型名称</label>
+        <input type="text" id="model" placeholder="例如 gpt-4o-mini / deepseek-chat / qwen-max" />
+        <div class="btn-row"><button class="btn btn-primary" onclick="saveSettings()">保存设置</button></div>
+      </div>
+
+      <div class="card">
+        <h2>后端日志</h2>
+        <pre id="logs">（暂无日志）</pre>
+      </div>
+    </main>
   </div>
 
   <script>
@@ -98,12 +118,8 @@
         const s = await api("/api/status");
         const running = s.backend_running && s.backend_ready;
         $("dot").className = "dot" + (running ? " running" : "");
-        $("statusText").textContent = running
-          ? "系统运行中"
-          : s.backend_running ? "系统启动中…" : "系统已停止";
-        $("statusMeta").textContent = running
-          ? `PID ${s.backend_pid} · 端口 ${s.backend_port} · 地址 ${s.app_url}`
-          : "点击「启动系统」开始使用";
+        $("statusText").textContent = running ? "问答系统运行中" : s.backend_running ? "系统启动中…" : "问答系统已停止";
+        $("statusMeta").textContent = running ? `PID ${s.backend_pid} · 端口 ${s.backend_port} · ${s.app_url}` : "点击「启动系统」开始使用";
         $("btnStart").disabled = running;
         $("btnStop").disabled = !s.backend_running;
         $("btnRestart").disabled = !s.backend_running;
@@ -114,7 +130,7 @@
         const l = await api("/api/logs?n=100");
         const el = $("logs");
         if (l.logs) { el.textContent = l.logs; el.scrollTop = el.scrollHeight; }
-      } catch (e) { /* ignore */ }
+      } catch (e) {}
     }
 
     async function loadSettings() {
@@ -127,13 +143,8 @@
     }
 
     async function saveSettings() {
-      const body = {
-        openai_base_url: $("baseUrl").value,
-        openai_model: $("model").value,
-        openai_api_key: $("apiKey").value,
-      };
       try {
-        const r = await api("/api/settings", "POST", body);
+        const r = await api("/api/settings", "POST", { openai_base_url: $("baseUrl").value, openai_model: $("model").value, openai_api_key: $("apiKey").value });
         $("apiKey").value = "";
         showMsg(r.message);
         loadSettings();
@@ -149,29 +160,13 @@
         openApp();
       } catch (e) { showMsg("启动失败：" + e.message, false); }
     }
+    async function stopSys() { try { const r = await api("/api/stop", "POST", {}); showMsg(r.message); refresh(); } catch (e) { showMsg("停止失败：" + e.message, false); } }
+    async function restartSys() { try { const r = await api("/api/restart", "POST", {}); showMsg(r.message); refresh(); } catch (e) { showMsg("重启失败：" + e.message, false); } }
 
-    async function stopSys() {
-      try {
-        const r = await api("/api/stop", "POST", {});
-        showMsg(r.message);
-        refresh();
-      } catch (e) { showMsg("停止失败：" + e.message, false); }
-    }
-
-    async function restartSys() {
-      try {
-        const r = await api("/api/restart", "POST", {});
-        showMsg(r.message);
-        refresh();
-      } catch (e) { showMsg("重启失败：" + e.message, false); }
-    }
-
-    function openApp() {
-      api("/api/status").then((s) => { if (s.app_url) window.open(s.app_url, "_blank"); });
-    }
+    function openApp() { api("/api/status").then((s) => { if (s.app_url) window.open(s.app_url, "_blank"); }); }
 
     async function quitAll() {
-      if (!confirm("确定退出控制台？系统服务也会一并停止。")) return;
+      if (!confirm("确定退出控制台？问答系统也会一并停止。")) return;
       try { await api("/api/stop", "POST", {}); } catch (e) {}
       try { await api("/api/quit", "POST", {}); } catch (e) {}
       showMsg("控制台已退出，可以关闭此页面");
