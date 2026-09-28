@@ -50,6 +50,19 @@ class Settings(BaseSettings):
 settings = Settings()
 
 
+def write_env(overrides: dict[str, str]) -> None:
+    env_path = ROOT_DIR / ".env"
+    content: dict[str, str] = {}
+    if env_path.exists():
+        for line in env_path.read_text(encoding="utf-8").splitlines():
+            line = line.strip()
+            if line and not line.startswith("#") and "=" in line:
+                k, v = line.split("=", 1)
+                content[k.strip()] = v.strip()
+    content.update(overrides)
+    env_path.write_text("".join(f"{k}={v}\n" for k, v in content.items()), encoding="utf-8")
+
+
 def fresh_llm_config() -> dict:
     """每次调用时重新读取 .env，使页面保存的 LLM 配置立即生效。"""
     s = Settings()

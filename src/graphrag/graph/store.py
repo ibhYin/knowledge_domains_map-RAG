@@ -215,6 +215,81 @@ class GraphStore:
             edges = edges[:max_edges]
         return sub, edges
 
+    # ---------- 图谱浏览器 ----------
+
+    def search_entities(self, q: str, limit: int = 20) -> list[dict]:
+        q_norm = normalize_str(q)
+        if not q_norm:
+            return []
+        results = []
+        for n, data in self.G.nodes(data=True):
+            name = data.get("name", n)
+            aliases = data.get("aliases", [])
+            if q_norm in normalize_str(name) or any(q_norm in normalize_str(a) for a in aliases):
+                results.append(
+                    {
+                        "id": n,
+                        "name": name,
+                        "type": data.get("type", "UNKNOWN"),
+                        "description": data.get("description", ""),
+                        "mention_count": data.get("mention_count", 0),
+                    }
+                )
+        results.sort(key=lambda x: x["mention_count"], reverse=True)
+        return results[:limit]
+
+    def entity_detail(self, key: str) -> dict | None:
+        if key not in self.G:
+            return None
+        data = self.G.nodes[key]
+        neighbors = []
+        seen = set()
+        for _, v, rkey, edata in self.G.edges(key, keys=True, data=True):
+            seen.add(("out", v, rkey))
+            neighbors.append(self._neighbor_entry("out", v, rkey, edata))
+        for u, _, rkey, edata in self.G.in_edges(key, keys=True, data=True):
+            if ("out", u, rkey) not in seen:
+                neighbors.append(self._neighbor_entry("in", u, rkey, edata))
+        neighbors.sort(key=lambda x: x.get("weight", 0), reverse=True)
+        return {
+            "id": key,
+            "name": data.get("name", key),
+            "type": data.get("type", "UNKNOWN"),
+            "description": data.get("description", ""),
+            "aliases": data.get("aliases", []),
+            "mention_count": data.get("mention_count", 0),
+            "source_docs": sorted({d.split(":", 1)[0] for d in data.get("source_chunks", [])}),
+            "neighbors": neighbors,
+        }
+
+    @staticmethod
+    def _neighbor_entry(direction: str, node: str, rkey: str, edata: dict) -> dict:
+        return {
+            "node": node,
+            "relation": rkey,
+            "direction": direction,
+            "weight": edata.get("weight", 1),
+            "description": edata.get("description", ""),
+        }
+
+    def find_path(self, from_key: str, to_key: str) -> dict | None:
+        if from_key not in self.G or to_key not in self.G:
+            return None
+        try:
+            nodes = nx.shortest_path(self.G, source=from_key, target=to_key)
+        except nx.NetworkXNoPath:
+            return None
+        links = []
+        for u, v in zip(nodes, nodes[1:]):
+            edge_data = self.G.get_edge_data(u, v)
+            if not edge_data:
+                edge_data = self.G.get_edge_data(v, u)
+            if not edge_data:
+                continue
+            best_key = max(edge_data, key=lambda k: edge_data[k].get("weight", 0))
+            links.append({"source": u, "target": v, "relation": best_key})
+        return {"nodes": nodes, "links": links}
+
     def export_graphml(self) -> str:
         return export_graphml(self.G)
 

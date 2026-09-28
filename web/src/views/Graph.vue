@@ -1,43 +1,52 @@
 <template>
-  <div class="view">
-    <h2>知识图谱</h2>
-    <div class="actions">
-      <button :disabled="building" @click="startBuild">
-        {{ building ? '构建中…' : '构建图谱' }}
-      </button>
-      <button class="danger" @click="clearGraph">清空图谱</button>
-    </div>
-    <div v-if="job" class="progress">
-      {{ job.status === 'done' ? '构建完成' : job.status === 'error' ? '构建失败' : '构建中' }}：
-      已处理 {{ job.processed }} / {{ job.total }} 个分块
-      <span v-if="job.failed">（失败 {{ job.failed }}）</span>
-      <span v-if="job.error" class="error-text">{{ job.error }}</span>
+  <div class="page">
+    <h1 class="page-title">知识图谱</h1>
+    <p class="page-desc">用 LLM 从文档抽取实体与关系构建知识图谱，支持增量更新。</p>
+
+    <div class="card">
+      <div class="btn-row" style="margin:0">
+        <button class="btn btn-success" :disabled="building" @click="startBuild">
+          {{ building ? '构建中…' : '构建图谱' }}
+        </button>
+        <button class="btn btn-ghost" @click="refresh">刷新统计</button>
+        <button class="btn btn-danger" @click="clearGraph">清空图谱</button>
+      </div>
+
+      <div v-if="job" style="margin-top:14px">
+        <div class="progress-track">
+          <div class="progress-bar" :style="{ width: progressWidth + '%' }"></div>
+        </div>
+        <div class="muted">
+          <template v-if="job.status === 'running'">正在抽取实体关系：已处理 {{ job.processed }} / {{ job.total }} 个分块…</template>
+          <template v-else-if="job.status === 'done'">构建完成：处理 {{ job.processed }} 个分块<span v-if="job.failed">（失败 {{ job.failed }}）</span></template>
+          <template v-else-if="job.status === 'error'"><span class="error-text">构建失败：{{ job.error }}</span></template>
+        </div>
+      </div>
     </div>
 
-    <div v-if="stats.nodes" class="stats-grid">
+    <div class="stat-grid">
       <div class="stat-card">
-        <div class="num">{{ stats.nodes }}</div>
+        <div class="num">{{ stats.nodes ?? '—' }}</div>
         <div class="label">实体节点</div>
       </div>
-      <div class="stat-card">
-        <div class="num">{{ stats.edges }}</div>
+      <div class="stat-card orange">
+        <div class="num">{{ stats.edges ?? '—' }}</div>
         <div class="label">关系边</div>
       </div>
-      <div v-if="stats.built_at" class="stat-card wide">
-        <div class="num small">{{ stats.built_at }}</div>
-        <div class="label">上次构建时间</div>
+      <div class="stat-card green" v-if="stats.built_at">
+        <div class="num" style="font-size:15px;line-height:28px">{{ stats.built_at }}</div>
+        <div class="label">上次构建</div>
       </div>
     </div>
 
-    <div v-if="typeStats.length" class="type-list">
-      <span v-for="t in typeStats" :key="t.type" class="type-chip">
-        {{ typeCn(t.type) }} {{ t.count }}
-      </span>
+    <div class="card">
+      <div class="card-title">图谱可视化</div>
+      <div class="type-legend">
+        <span v-for="t in typeStats" :key="t.type" class="chip">{{ typeCn(t.type) }} {{ t.count }}</span>
+      </div>
+      <GraphViz v-if="viz.nodes.length" :nodes="viz.nodes" :links="viz.links" height="600px" />
+      <p v-else class="empty">图谱为空。请先在「文档」页上传文档，再点击上方「构建图谱」。</p>
     </div>
-
-    <h3>图谱可视化（点击节点高亮邻居）</h3>
-    <GraphViz :nodes="viz.nodes" :links="viz.links" height="600px" v-if="viz.nodes.length" />
-    <p v-else class="empty">图谱为空，请先上传文档并构建图谱。</p>
   </div>
 </template>
 
@@ -55,17 +64,18 @@ let pollTimer = null
 const TYPE_CN = { PERSON: '人物', ORG: '组织', LOCATION: '地点', CONCEPT: '概念', TIME: '时间', EVENT: '事件' }
 const typeCn = (t) => TYPE_CN[t] || t
 
-const typeStats = computed(() =>
-  Object.entries(stats.value.node_types || {}).map(([type, count]) => ({ type, count })),
-)
+const typeStats = computed(() => Object.entries(stats.value.node_types || {}).map(([type, count]) => ({ type, count })))
+const progressWidth = computed(() => {
+  if (!job.value || !job.value.total) return 0
+  return Math.min(100, Math.round((job.value.processed / job.value.total) * 100))
+})
 
 async function refresh() {
   try {
     stats.value = await api.graphStats()
-    const data = await api.graphViz()
-    viz.value = data
-  } catch (err) {
-    alert(`获取图谱失败：${err.message}`)
+    viz.value = await api.graphViz()
+  } catch (e) {
+    /* ignore */
   }
 }
 
@@ -75,8 +85,8 @@ async function startBuild() {
   try {
     const { job_id } = await api.buildGraph()
     await poll(job_id)
-  } catch (err) {
-    job.value = { status: 'error', error: err.message }
+  } catch (e) {
+    job.value = { status: 'error', error: e.message }
     building.value = false
   }
 }
@@ -103,19 +113,5 @@ onMounted(refresh)
 </script>
 
 <style scoped>
-.actions { display: flex; gap: 12px; margin: 12px 0; }
-button { background: #2563eb; color: #fff; border: none; border-radius: 6px; padding: 8px 16px; cursor: pointer; font-size: 14px; }
-button:disabled { opacity: 0.6; cursor: not-allowed; }
-.danger { background: #fff; color: #dc2626; border: 1px solid #fca5a5; }
-.progress { margin: 10px 0; color: #2563eb; }
-.error-text { color: #dc2626; margin-left: 8px; }
-.stats-grid { display: flex; gap: 16px; margin: 16px 0; flex-wrap: wrap; }
-.stat-card { border: 1px solid #e5e7eb; border-radius: 8px; padding: 14px 22px; text-align: center; min-width: 110px; }
-.stat-card.wide { min-width: 220px; }
-.num { font-size: 28px; font-weight: 700; color: #2563eb; }
-.num.small { font-size: 16px; line-height: 28px; }
-.label { color: #6b7280; font-size: 13px; margin-top: 4px; }
-.type-list { display: flex; gap: 8px; flex-wrap: wrap; margin-bottom: 16px; }
-.type-chip { background: #eff6ff; color: #1d4ed8; border-radius: 999px; padding: 4px 12px; font-size: 13px; }
-.empty { color: #999; }
+.type-legend { display: flex; flex-wrap: wrap; gap: 6px; margin-bottom: 12px; }
 </style>
