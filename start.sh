@@ -69,15 +69,22 @@ if [ "$MODE" = "dev" ]; then
   log "\n按 Ctrl+C 停止全部服务"
   wait
 else
-  log "▶ 启动控制台:  http://localhost:$CONTROL_PORT"
-  kill_stale "$CONTROL_PORT" "控制台" "graphrag"
+  log "▶ 一键启动问答系统:  http://localhost:$BACKEND_PORT"
   kill_stale "$BACKEND_PORT" "后端" "graphrag.api.main"
-  PYTHONPATH="$PYTHONPATH" uvicorn src.graphrag.supervisor.app:app --host 127.0.0.1 --port "$CONTROL_PORT" &
-  CONTROL_PID=$!
-  wait_ready "http://localhost:$CONTROL_PORT/api/status" || { log "❌ 控制台启动失败，请查看日志"; exit 1; }
-  log "✅ 控制台已启动:  http://localhost:$CONTROL_PORT"
-  log "   在页面中配置 LLM 并点击「启动系统」进入问答界面"
-  open_browser "http://localhost:$CONTROL_PORT"
-  log "\n按 Ctrl+C 停止控制台"
+  # 确保引导服务在运行
+  if ! lsof -ti :"$CONTROL_PORT" -sTCP:LISTEN -P -n >/dev/null 2>&1; then
+    PYTHONPATH="$PYTHONPATH" uvicorn src.graphrag.supervisor.app:app --host 127.0.0.1 --port "$CONTROL_PORT" &
+    CONTROL_PID=$!
+    wait_ready "http://localhost:$CONTROL_PORT/api/status" || { log "❌ 引导服务启动失败，请查看日志"; exit 1; }
+  fi
+  # 确保后端运行
+  if ! curl -sf "http://localhost:$BACKEND_PORT/api/health" >/dev/null 2>&1; then
+    log "   正在启动问答系统，请稍候…"
+    curl -sf -X POST "http://localhost:$CONTROL_PORT/api/start" -H "Content-Type: application/json" -d '{}' >/dev/null 2>&1 || true
+    wait_ready "http://localhost:$BACKEND_PORT/api/health" 90 || { log "❌ 系统启动失败，请查看 data/logs/backend.log"; exit 1; }
+  fi
+  log "✅ 系统已启动:  http://localhost:$BACKEND_PORT"
+  open_browser "http://localhost:$BACKEND_PORT"
+  log "\n按 Ctrl+C 停止引导服务（问答系统会继续运行）"
   wait
 fi

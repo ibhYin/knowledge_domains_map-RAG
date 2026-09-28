@@ -7,7 +7,7 @@ import time
 from pathlib import Path
 
 from fastapi import FastAPI
-from fastapi.responses import HTMLResponse
+from fastapi.responses import PlainTextResponse
 from pydantic import BaseModel
 from pydantic_settings import BaseSettings, SettingsConfigDict
 from typing import Optional
@@ -140,10 +140,9 @@ class SettingsUpdate(BaseModel):
     openai_model: Optional[str] = None
 
 
-@app.get("/", response_class=HTMLResponse)
+@app.get("/", response_class=PlainTextResponse)
 def index():
-    page = Path(__file__).parent / "static" / "index.html"
-    return HTMLResponse(page.read_text(encoding="utf-8"))
+    return "GraphRAG 控制服务运行中（无独立页面）。请访问 http://localhost:8002 使用问答系统。"
 
 
 @app.get("/api/status")

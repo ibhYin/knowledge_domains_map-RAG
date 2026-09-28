@@ -15,7 +15,7 @@
 
 ```
 ├── src/graphrag/          # 后端（config/schemas/loaders/splitting/llm/graph/retrieval/pipeline/api）
-│   └── supervisor/        # 控制台服务（LLM 配置 + 一键启停，端口 8001）
+│   └── supervisor/        # 引导服务（后台管理启停，端口 8001，无页面）
 ├── web/                   # Vue 3 + Vite + ECharts 前端
 ├── data/                  # 运行时数据（文档/分块/图谱/日志，git 忽略）
 ├── 启动GraphRAG.command   # 双击启动控制台
@@ -29,9 +29,9 @@
 | 端口 | 服务 | 说明 |
 |---|---|---|
 | **8002** | RAG 系统 | 主应用（首页/文档/图谱/图谱浏览器/问答/问答历史/**系统控制**），含页面内启停 |
-| **8001** | 引导控制台 | 仅当 8002 停止时使用（冷启动入口），双击 `.command` 打开 |
+| **8001** | 引导服务 | 纯后台（无页面），负责拉起/管理 8002，由 `.command` 或 8002 内部自动调用 |
 
-日常使用只进 **8002**：「系统控制」页即可配置 LLM、启动/停止/重启系统、查看日志。8001 只在系统停止后用来重新拉起。
+日常使用只进 **8002**：「系统控制」页即可配置 LLM、启动/停止/重启系统、查看日志。8001 是隐藏的后台服务，无需手动访问。
 
 ## 快速开始
 
@@ -44,12 +44,12 @@ pip install fastapi python-docx    # 仅需补充这两个包
 
 ### 2. 启动
 
-**方式 A（推荐，无需终端）**：双击项目根目录的 `启动GraphRAG.command` → 打开 8001 引导控制台 → 点「启动系统」→ 进入 8002 主应用。
+**方式 A（推荐，无需终端）**：双击项目根目录的 `启动GraphRAG.command` → 自动启动系统并直接打开 http://localhost:8002。
 
 **方式 B（命令行）**：
 
 ```bash
-./start.sh         # 启动引导控制台（等价双击 .command）
+./start.sh         # 一键启动问答系统（等价双击 .command）
 ./start.sh dev     # 开发模式：前端 :5173 + 后端 :8002（热更新）
 ```
 
@@ -57,7 +57,7 @@ pip install fastapi python-docx    # 仅需补充这两个包
 
 1. **系统控制**页：填写 **base_url / api_key / model** → 保存（立即生效）；启动/停止/重启系统、查看日志
 2. **文档**页上传 → **图谱**页构建 → **问答**页提问
-3. 若停止系统后需重启：双击 `启动GraphRAG.command` 打开 8001，或访问 http://localhost:8001
+3. 若在「系统控制」页停止了系统：再次双击 `启动GraphRAG.command` 即可重启
 
 > 手动启动后端备用命令：`PYTHONPATH=src uvicorn src.graphrag.api.main:app --port 8002`
 

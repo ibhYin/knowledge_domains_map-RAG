@@ -1,7 +1,7 @@
 <template>
   <div class="page">
     <h1 class="page-title">系统控制</h1>
-    <p class="page-desc">在此配置 LLM 并启动 / 停止系统。停止系统后，请双击「启动GraphRAG.command」或打开 http://localhost:8001 重新启动。</p>
+    <p class="page-desc">在此配置 LLM 并启动 / 停止系统。停止后重新启动：再次双击「启动GraphRAG.command」。</p>
 
     <div class="card">
       <div class="card-title">系统状态</div>
@@ -126,14 +126,15 @@ async function doStart() {
 }
 
 async function doStop() {
-  if (!confirm('确定停止系统？停止后需通过 启动GraphRAG.command 或 http://localhost:8001 重新启动。')) return
+  if (!confirm('确定停止系统？停止后需再次双击「启动GraphRAG.command」来重新启动。')) return
   stopped = true
   try {
     await api.controlStop()
   } catch (e) {
     /* 后端已被停止，请求失败属正常 */
   }
-  window.location.href = 'http://localhost:8001'
+  alert('系统已停止。请双击「启动GraphRAG.command」重新启动。')
+  window.location.href = 'about:blank'
 }
 
 async function doRestart() {
