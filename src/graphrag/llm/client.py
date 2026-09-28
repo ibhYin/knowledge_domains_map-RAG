@@ -2,15 +2,16 @@ from typing import Optional
 
 from langchain_openai import ChatOpenAI
 
-from graphrag.config import settings
+from graphrag.config import fresh_llm_config
 
 
 def build_llm(model: Optional[str] = None, temperature: Optional[float] = None) -> ChatOpenAI:
+    cfg = fresh_llm_config()
     return ChatOpenAI(
-        model=model or settings.openai_model,
-        api_key=settings.openai_api_key,
-        base_url=settings.openai_base_url,
-        temperature=temperature if temperature is not None else settings.temperature_extract,
+        model=model or cfg["openai_model"],
+        api_key=cfg["openai_api_key"],
+        base_url=cfg["openai_base_url"],
+        temperature=temperature if temperature is not None else cfg["temperature_extract"],
         max_retries=3,
         timeout=120,
     )

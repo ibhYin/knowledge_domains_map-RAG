@@ -15,41 +15,49 @@
 
 ```
 ├── src/graphrag/          # 后端（config/schemas/loaders/splitting/llm/graph/retrieval/pipeline/api）
+│   └── supervisor/        # 控制台服务（LLM 配置 + 一键启停，端口 8001）
 ├── web/                   # Vue 3 + Vite + ECharts 前端
-├── data/                  # 运行时数据（文档/分块/图谱，git 忽略）
+├── data/                  # 运行时数据（文档/分块/图谱/日志，git 忽略）
+├── 启动GraphRAG.command   # 双击启动控制台
+├── start.sh               # 命令行版启动脚本
 ├── .env.example           # 环境变量模板
 └── requirements.txt
 ```
 
+## 端口与架构
+
+| 端口 | 服务 | 说明 |
+|---|---|---|
+| **8001** | 控制台 | 常驻服务：填 LLM 配置、一键启动/停止系统、查看日志 |
+| **8002** | RAG 系统 | 真正的应用（文档/图谱/问答页面），由控制台启停 |
+
 ## 快速开始
 
-### 1. 配置环境
+### 1. 配置环境（仅首次）
 
 ```bash
 conda activate langchain
 pip install fastapi python-docx    # 仅需补充这两个包
-cp .env.example .env               # 填入 OPENAI_BASE_URL / OPENAI_API_KEY / OPENAI_MODEL
 ```
 
-### 2. 一键启动
+### 2. 启动（两种方式任选）
+
+**方式 A（推荐，无需终端）**：双击项目根目录的 `启动GraphRAG.command`，自动打开控制台 `http://localhost:8001`。
+
+**方式 B（命令行）**：
 
 ```bash
-./start.sh         # 生产模式：单端口 http://localhost:8001（自动构建前端）
-./start.sh dev     # 开发模式：前端 http://localhost:5173 + 后端 :8001（热更新）
+./start.sh         # 启动控制台（等价双击 .command）
+./start.sh dev     # 开发模式：前端 :5173 + 后端 :8002（热更新）
 ```
 
-脚本会自动激活 conda 环境、清理旧实例、轮询等待服务就绪并打开浏览器，Ctrl+C 一键停止。
+### 3. 在控制台页面操作
 
-### 手动启动（可选）
+1. 填写 **base_url / api_key / model** → 点「保存设置」（保存后立即生效，无需重启）
+2. 点「**启动系统**」→ 自动打开系统页面 `http://localhost:8002`
+3. 想停止时回到控制台点「**停止系统**」；「退出控制台」可关闭控制台本身
 
-```bash
-# 终端 1：后端
-PYTHONPATH=src uvicorn src.graphrag.api.main:app --reload --port 8001
-# 终端 2：前端（仅开发模式需要）
-cd web && npm run dev
-```
-
-生产模式 `npm run build` 后由后端自动托管 `web/dist`（单端口访问 `http://localhost:8001`）。
+> 手动启动后端备用命令：`PYTHONPATH=src uvicorn src.graphrag.api.main:app --port 8002`
 
 ## 使用流程
 

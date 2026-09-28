@@ -48,3 +48,16 @@ class Settings(BaseSettings):
 
 
 settings = Settings()
+
+
+def fresh_llm_config() -> dict:
+    """每次调用时重新读取 .env，使页面保存的 LLM 配置立即生效。"""
+    s = Settings()
+    return {
+        "openai_base_url": s.openai_base_url,
+        "openai_api_key": s.openai_api_key,
+        "openai_model": s.openai_model,
+        "temperature_extract": s.temperature_extract,
+        "temperature_answer": s.temperature_answer,
+        "structured_output_method": s.structured_output_method,
+    }

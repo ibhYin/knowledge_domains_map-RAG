@@ -6,7 +6,7 @@ from typing import Optional
 from langchain_core.prompts import ChatPromptTemplate
 from langchain_core.runnables import Runnable
 
-from graphrag.config import settings
+from graphrag.config import fresh_llm_config
 from graphrag.llm.client import build_llm
 from graphrag.schemas.extraction import ChunkExtraction, QueryEntities
 
@@ -102,9 +102,10 @@ class EntityExtractor:
             prompt = ChatPromptTemplate.from_messages(
                 [("system", EXTRACTION_SYSTEM_PROMPT), ("human", "文本：\n{text}")]
             )
+            method = fresh_llm_config()["structured_output_method"]
             self._chain = prompt | self.llm.with_structured_output(
                 ChunkExtraction,
-                method=settings.structured_output_method,
+                method=method,
                 include_raw=True,
             )
         return self._chain
@@ -145,7 +146,7 @@ class QueryEntityExtractor:
             )
             self._chain = prompt | self.llm.with_structured_output(
                 QueryEntities,
-                method=settings.structured_output_method,
+                method=fresh_llm_config()["structured_output_method"],
                 include_raw=True,
             )
         return self._chain

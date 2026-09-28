@@ -26,6 +26,7 @@ const ActiveComp = computed(() => tabs.find((t) => t.key === active.value).comp)
         >
           {{ t.label }}
         </button>
+        <a class="console-link" href="http://localhost:8001" target="_blank" title="LLM 配置与启停控制">控制台 ⚙</a>
       </nav>
     </header>
     <main>
@@ -43,6 +44,7 @@ header h1 { font-size: 20px; margin: 0; }
 nav { display: flex; gap: 8px; }
 nav button { border: none; background: #e5e7eb; color: #374151; border-radius: 6px; padding: 8px 18px; cursor: pointer; font-size: 14px; }
 nav button.active { background: #2563eb; color: #fff; }
+.console-link { color: #2563eb; text-decoration: none; font-size: 14px; border: 1px solid #bfdbfe; background: #eff6ff; border-radius: 6px; padding: 8px 14px; }
 main .view { background: #fff; border-radius: 10px; padding: 22px; box-shadow: 0 1px 3px rgba(0, 0, 0, 0.06); }
 h2 { font-size: 18px; margin: 0 0 6px; }
 h3 { font-size: 15px; color: #374151; margin: 20px 0 8px; }
