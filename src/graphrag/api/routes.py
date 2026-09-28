@@ -4,6 +4,7 @@ import time
 import uuid
 from typing import Optional
 
+import httpx
 from fastapi import APIRouter, HTTPException, Query, UploadFile
 from fastapi.responses import PlainTextResponse
 
@@ -214,6 +215,46 @@ def clear_history():
     if _HISTORY_FILE.exists():
         _HISTORY_FILE.write_text("[]", encoding="utf-8")
     return {"cleared": True}
+
+
+_SUPERVISOR_URL = "http://127.0.0.1:8001"
+
+
+def _proxy_supervisor(path: str, method: str = "GET", body: Optional[dict] = None):
+    try:
+        with httpx.Client(timeout=5) as client:
+            resp = client.request(method, f"{_SUPERVISOR_URL}{path}", json=body)
+            return resp.json()
+    except httpx.HTTPError as exc:
+        raise HTTPException(
+            status_code=503,
+            detail=f"控制服务未运行（{exc}）。系统停止后，请双击「启动GraphRAG.command」或打开 http://localhost:8001 重新启动。",
+        ) from exc
+
+
+@router.get("/control/status")
+def control_status():
+    return _proxy_supervisor("/api/status")
+
+
+@router.get("/control/logs")
+def control_logs(n: int = 80):
+    return _proxy_supervisor(f"/api/logs?n={n}")
+
+
+@router.post("/control/start")
+def control_start():
+    return _proxy_supervisor("/api/start", "POST", {})
+
+
+@router.post("/control/stop")
+def control_stop():
+    return _proxy_supervisor("/api/stop", "POST", {})
+
+
+@router.post("/control/restart")
+def control_restart():
+    return _proxy_supervisor("/api/restart", "POST", {})
 
 
 @router.post("/query")

@@ -51,7 +51,12 @@ export const api = {
   history: () => request('/api/history'),
   clearHistory: () => request('/api/history', { method: 'DELETE' }),
 
-  // 设置
+  // 设置与系统控制
   settings: () => request('/api/settings'),
   saveSettings: (payload) => postJSON('/api/settings', payload),
+  controlStatus: () => request('/api/control/status'),
+  controlLogs: (n = 100) => request(`/api/control/logs?n=${n}`),
+  controlStart: () => postJSON('/api/control/start', {}),
+  controlStop: () => postJSON('/api/control/stop', {}),
+  controlRestart: () => postJSON('/api/control/restart', {}),
 }

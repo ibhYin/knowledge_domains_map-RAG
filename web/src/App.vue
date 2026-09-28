@@ -6,7 +6,7 @@ import Graph from './views/Graph.vue'
 import Explorer from './views/Explorer.vue'
 import Chat from './views/Chat.vue'
 import History from './views/History.vue'
-import Settings from './views/Settings.vue'
+import SystemControl from './views/SystemControl.vue'
 
 const navs = [
   { key: 'dashboard', label: '首页', icon: 'M3 10.5 12 3l9 7.5M5 9v11h5v-6h4v6h5V9', comp: markRaw(Dashboard) },
@@ -15,7 +15,7 @@ const navs = [
   { key: 'explorer', label: '图谱浏览器', icon: 'M21 21l-4.3-4.3M11 19a8 8 0 1 1 0-16 8 8 0 0 1 0 16zm-2-8h4m-2-2v4', comp: markRaw(Explorer) },
   { key: 'chat', label: '问答', icon: 'M21 12a8 8 0 0 1-11.6 7.1L4 20l1-4.7A8 8 0 1 1 21 12zM8.5 10h7m-7 4h4', comp: markRaw(Chat) },
   { key: 'history', label: '问答历史', icon: 'M12 8v4l3 3m6-3a9 9 0 1 1-18 0 9 9 0 0 1 18 0z', comp: markRaw(History) },
-  { key: 'settings', label: '设置', icon: 'M12 15a3 3 0 1 0 0-6 3 3 0 0 0 0 6zm7.4-3a7.4 7.4 0 0 0-.1-1.2l2-1.5-2-3.4-2.3 1a7.5 7.5 0 0 0-2-1.2L14.5 3h-5l-.5 2.6a7.5 7.5 0 0 0-2 1.2l-2.3-1-2 3.4 2 1.5a7.4 7.4 0 0 0 0 2.4l-2 1.5 2 3.4 2.3-1a7.5 7.5 0 0 0 2 1.2l.5 2.7h5l.5-2.7a7.5 7.5 0 0 0 2-1.2l2.3 1 2-3.4-2-1.5c.1-.4.1-.8.1-1.2z', comp: markRaw(Settings) },
+  { key: 'system', label: '系统控制', icon: 'M12 15a3 3 0 1 0 0-6 3 3 0 0 0 0 6zm7.4-3a7.4 7.4 0 0 0-.1-1.2l2-1.5-2-3.4-2.3 1a7.5 7.5 0 0 0-2-1.2L14.5 3h-5l-.5 2.6a7.5 7.5 0 0 0-2 1.2l-2.3-1-2 3.4 2 1.5a7.4 7.4 0 0 0 0 2.4l-2 1.5 2 3.4 2.3-1a7.5 7.5 0 0 0 2 1.2l.5 2.7h5l.5-2.7a7.5 7.5 0 0 0 2-1.2l2.3 1 2-3.4-2-1.5c.1-.4.1-.8.1-1.2z', comp: markRaw(SystemControl) },
 ]
 
 const active = ref('dashboard')
@@ -43,12 +43,6 @@ const ActiveComp = computed(() => navs.find((n) => n.key === active.value).comp)
           <span>{{ n.label }}</span>
         </a>
       </nav>
-      <div class="footer">
-        <a href="http://localhost:8001" target="_blank" style="color:#818cf8;text-decoration:none;font-size:12px;display:flex;align-items:center;gap:6px">
-          <svg viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M12 15a3 3 0 1 0 0-6 3 3 0 0 0 0 6zm7.4-3a7.4 7.4 0 0 0-.1-1.2l2-1.5-2-3.4-2.3 1a7.5 7.5 0 0 0-2-1.2L14.5 3h-5l-.5 2.6a7.5 7.5 0 0 0-2 1.2l-2.3-1-2 3.4 2 1.5a7.4 7.4 0 0 0 0 2.4l-2 1.5 2 3.4 2.3-1a7.5 7.5 0 0 0 2 1.2l.5 2.7h5l.5-2.7a7.5 7.5 0 0 0 2-1.2l2.3 1 2-3.4-2-1.5c.1-.4.1-.8.1-1.2z" /></svg>
-          系统控制台
-        </a>
-      </div>
     </aside>
     <main class="main">
       <component :is="ActiveComp" @nav="(k) => (active = k)" />
