@@ -1,3 +1,5 @@
+import logging
+
 import networkx as nx
 
 from graphrag.config import settings
@@ -12,6 +14,8 @@ DEFAULT_META = {
     "stats": {},
 }
 
+logger = logging.getLogger(__name__)
+
 
 class GraphStore:
     def __init__(self, graph: nx.MultiDiGraph | None = None, alias_map: dict[str, str] | None = None):
@@ -22,16 +26,21 @@ class GraphStore:
     # ---------- 持久化 ----------
 
     def load(self) -> None:
-        self.G = load_graph(settings.graph_file)
-        meta = load_meta(settings.graph_meta_file)
+        self.G, meta = load_graph(settings.graph_file)
+        if meta is None:
+            meta = load_meta(settings.graph_meta_file)
         self.meta = {**DEFAULT_META, **meta}
         self.resolver = EntityResolver(self.meta.get("alias_map", {}))
 
     def save(self) -> None:
         self.meta["alias_map"] = self.resolver.to_dict()
         self.meta["stats"] = self.stats()
-        save_graph(self.G, settings.graph_file)
-        save_meta(self.meta, settings.graph_meta_file)
+        # 图和成功处理记录同一快照原子提交，meta.json 仅兼容旧工具。
+        save_graph(self.G, settings.graph_file, self.meta)
+        try:
+            save_meta(self.meta, settings.graph_meta_file)
+        except OSError as exc:
+            logger.warning("图谱快照已保存，meta.json 镜像更新失败: %s", type(exc).__name__)
 
     def clear(self) -> None:
         self.G = nx.MultiDiGraph()

@@ -1,28 +1,44 @@
 import json
+import os
+import tempfile
 from pathlib import Path
 
 import networkx as nx
 
 
-def save_graph(graph: nx.MultiDiGraph, path: Path) -> None:
+def _write_json(data: dict, path: Path) -> None:
     path.parent.mkdir(parents=True, exist_ok=True)
+    temporary = None
+    try:
+        with tempfile.NamedTemporaryFile(mode="w", encoding="utf-8", dir=path.parent, delete=False) as f:
+            temporary = Path(f.name)
+            json.dump(data, f, ensure_ascii=False, indent=2, default=str)
+            f.flush()
+            os.fsync(f.fileno())
+        os.replace(temporary, path)
+    finally:
+        if temporary is not None:
+            temporary.unlink(missing_ok=True)
+
+
+def save_graph(graph: nx.MultiDiGraph, path: Path, meta: dict) -> None:
     data = nx.node_link_data(graph, edges="links")
-    path.write_text(json.dumps(data, ensure_ascii=False, indent=2), encoding="utf-8")
+    data["metadata"] = meta
+    _write_json(data, path)
 
 
-def load_graph(path: Path) -> nx.MultiDiGraph:
+def load_graph(path: Path) -> tuple[nx.MultiDiGraph, dict | None]:
     if not path.exists():
-        return nx.MultiDiGraph()
+        return nx.MultiDiGraph(), None
     data = json.loads(path.read_text(encoding="utf-8"))
-    return nx.node_link_graph(data, directed=True, multigraph=True, edges="links")
+    meta = data.get("metadata")
+    if meta is not None and not isinstance(meta, dict):
+        raise ValueError("图谱快照中的 metadata 必须是对象")
+    return nx.node_link_graph(data, directed=True, multigraph=True, edges="links"), meta
 
 
 def save_meta(meta: dict, path: Path) -> None:
-    path.parent.mkdir(parents=True, exist_ok=True)
-    path.write_text(
-        json.dumps(meta, ensure_ascii=False, indent=2, default=str),
-        encoding="utf-8",
-    )
+    _write_json(meta, path)
 
 
 def load_meta(path: Path) -> dict:

@@ -3,8 +3,12 @@ import logging
 import re
 from typing import Optional
 
+from langchain_core.exceptions import OutputParserException
+from langchain_core.messages import SystemMessage
 from langchain_core.prompts import ChatPromptTemplate
 from langchain_core.runnables import Runnable
+from openai import APIError
+from pydantic import ValidationError
 
 from graphrag.config import fresh_llm_config
 from graphrag.llm.client import build_llm
@@ -72,9 +76,13 @@ QUERY_EXTRACTION_PROMPT = """你是实体识别助手。从用户问题中抽取
 若实体类型不确定，type 填 null。"""
 
 
-def _parse_raw_json(raw: str) -> Optional[dict]:
+class QueryExtractionError(RuntimeError):
+    """问题抽取的模型调用或输出解析失败。"""
+
+
+def _parse_raw_json(raw: object) -> Optional[dict]:
     """从非结构化输出中提取首个 JSON 对象。"""
-    if not raw:
+    if not isinstance(raw, str) or not raw:
         return None
     raw = raw.strip()
     try:
@@ -97,10 +105,10 @@ class EntityExtractor:
 
     def _get_chain(self) -> Runnable:
         if self.llm is None:
-            self.llm = build_llm()
+            self.llm = build_llm(for_extraction=True)
         if self._chain is None:
             prompt = ChatPromptTemplate.from_messages(
-                [("system", EXTRACTION_SYSTEM_PROMPT), ("human", "文本：\n{text}")]
+                [SystemMessage(content=EXTRACTION_SYSTEM_PROMPT), ("human", "文本：\n{text}")]
             )
             method = fresh_llm_config()["structured_output_method"]
             self._chain = prompt | self.llm.with_structured_output(
@@ -111,24 +119,21 @@ class EntityExtractor:
         return self._chain
 
     def extract(self, text: str) -> Optional[ChunkExtraction]:
+        chain = self._get_chain()
         try:
-            result = self._get_chain().invoke({"text": text})
-        except Exception as exc:  # noqa: BLE001
-            logger.warning("实体抽取调用失败: %s", exc)
+            result = chain.invoke({"text": text})
+        except (APIError, OutputParserException) as exc:
+            logger.warning("实体抽取调用失败: %s", type(exc).__name__)
             return None
         # with_structured_output include_raw=True 返回 {"raw":..., "parsed":...}
         parsed = result.get("parsed") if isinstance(result, dict) else result
-        if parsed is not None:
-            return parsed
-        raw = result.get("raw", {}).get("content", "") if isinstance(result, dict) else ""
-        data = _parse_raw_json(raw)
-        if data is None:
-            logger.warning("实体抽取输出无法解析为 JSON，跳过该片段")
-            return None
+        if parsed is None:
+            raw = getattr(result.get("raw"), "content", None) if isinstance(result, dict) else None
+            parsed = _parse_raw_json(raw)
         try:
-            return ChunkExtraction.model_validate(data)
-        except Exception as exc:  # noqa: BLE001
-            logger.warning("实体抽取输出校验失败: %s", exc)
+            return ChunkExtraction.model_validate(parsed)
+        except ValidationError:
+            logger.warning("实体抽取输出无法解析或不符合实体关系结构，跳过该片段")
             return None
 
 
@@ -139,10 +144,10 @@ class QueryEntityExtractor:
 
     def _get_chain(self) -> Runnable:
         if self.llm is None:
-            self.llm = build_llm()
+            self.llm = build_llm(for_extraction=True)
         if self._chain is None:
             prompt = ChatPromptTemplate.from_messages(
-                [("system", QUERY_EXTRACTION_PROMPT), ("human", "问题：{text}")]
+                [SystemMessage(content=QUERY_EXTRACTION_PROMPT), ("human", "问题：{text}")]
             )
             self._chain = prompt | self.llm.with_structured_output(
                 QueryEntities,
@@ -152,19 +157,18 @@ class QueryEntityExtractor:
         return self._chain
 
     def extract(self, question: str) -> list:
+        chain = self._get_chain()
         try:
-            result = self._get_chain().invoke({"text": question})
-        except Exception as exc:  # noqa: BLE001
-            logger.warning("问题实体抽取调用失败: %s", exc)
-            return []
+            result = chain.invoke({"text": question})
+        except (APIError, OutputParserException) as exc:
+            logger.warning("问题实体抽取调用失败: %s", type(exc).__name__)
+            raise QueryExtractionError("问题实体识别服务调用失败，请稍后重试。") from exc
         parsed = result.get("parsed") if isinstance(result, dict) else result
-        if parsed is not None:
-            return parsed.entities
-        raw = result.get("raw", {}).get("content", "") if isinstance(result, dict) else ""
-        data = _parse_raw_json(raw)
-        if data is None:
-            return []
+        if parsed is None:
+            raw = getattr(result.get("raw"), "content", None) if isinstance(result, dict) else None
+            parsed = _parse_raw_json(raw)
         try:
-            return QueryEntities.model_validate(data).entities
-        except Exception:  # noqa: BLE001
-            return []
+            return QueryEntities.model_validate(parsed).entities
+        except ValidationError as exc:
+            logger.warning("问题实体抽取输出无法解析或不符合实体结构")
+            raise QueryExtractionError("问题实体识别结果格式错误，请重试。") from exc

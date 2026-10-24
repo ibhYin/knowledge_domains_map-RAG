@@ -28,10 +28,10 @@
 
 | 端口 | 服务 | 说明 |
 |---|---|---|
-| **8002** | RAG 系统 | 主应用（首页/文档/图谱/图谱浏览器/问答/问答历史/**系统控制**），含页面内启停 |
-| **8001** | 引导服务 | 纯后台（无页面），负责拉起/管理 8002，由 `.command` 或 8002 内部自动调用 |
+| **8002** | RAG 系统 | 主应用（首页/文档/图谱/图谱浏览器/问答/问答历史/**模型设置**） |
+| **8001** | 引导服务 | 纯后台（无页面），由启动脚本使用，负责拉起 8002 |
 
-日常使用只进 **8002**：「系统控制」页即可配置 LLM、启动/停止/重启系统、查看日志。8001 是隐藏的后台服务，无需手动访问。
+日常使用只进 **8002**：「模型设置」页配置 LLM。8001 是启动脚本使用的后台引导服务，无需手动访问；业务页面不提供服务启动、停止或重启按钮。
 
 ## 快速开始
 
@@ -55,9 +55,9 @@ pip install fastapi python-docx    # 仅需补充这两个包
 
 ### 3. 日常使用（都在 8002）
 
-1. **系统控制**页：填写 **base_url / api_key / model** → 保存（立即生效）；启动/停止/重启系统、查看日志
+1. **模型设置**页：填写 **base_url / api_key / model** → 保存；新建的模型请求使用新配置
 2. **文档**页上传 → **图谱**页构建 → **问答**页提问
-3. 若在「系统控制」页停止了系统：再次双击 `启动GraphRAG.command` 即可重启
+3. 构建时可以切换页面；刷新后进入图谱页，会继续显示最近一次任务。后端重启会终止正在运行的任务，页面会提示任务不存在
 
 > 手动启动后端备用命令：`PYTHONPATH=src uvicorn src.graphrag.api.main:app --port 8002`
 
@@ -90,6 +90,32 @@ pip install fastapi python-docx    # 仅需补充这两个包
 | `STRUCTURED_OUTPUT_METHOD` | `json_mode`（默认）/ `function_calling` / `json_schema` |
 | `CHUNK_SIZE` / `CHUNK_OVERLAP` | 分块大小/重叠（字符） |
 | `EXTRACTION_CONCURRENCY` | 抽取并发数 |
+| `BUILD_CHECKPOINT_INTERVAL` | 阶段保存间隔，默认 50 个已处理分块；首个成功结果立即保存 |
+| `EXTRACTION_THINKING` | 可选 enabled / disabled，仅对支持 thinking 参数的模型设置；只作用于文档和问题实体抽取，默认不发送该参数 |
+
+### 长任务与进度
+
+新版后端可通过 `/api/graph/build/current` 找到当前任务，不依赖某个浏览器事先记住任务 ID。页面显示处理百分比、成功／失败数量、最近获取进度的时间；切换页面后顶部仍显示当前任务。
+
+分块按完成顺序合图，避免一个慢请求堵住后面已完成的进度。首个成功结果立即保存，之后按 `BUILD_CHECKPOINT_INTERVAL` 保存检查点。图谱与成功处理记录放入同一个原子快照；中断后重新启动并点击构建，可跳过已保存的成功分块。支持读取原有图谱格式；meta.json 保留为兼容镜像，以 graph.json 内的 metadata 为准。
+
+若模型支持关闭深度思考，可配置 `EXTRACTION_THINKING=disabled`，先用短样例验证速度和抽取质量。切换到不支持 thinking 的服务时，应移除此配置；不应只为提速盲目增加并发。
+
+已经运行中的旧后端不会自动加载这些代码。在长任务期间不要为升级重启后端；应等当前任务保存完成后再启动新版本。本次前端发布为现有旧任务附带一次性恢复信息，新后端启动后由当前任务 API 负责发现。
+
+### 火山方舟 Coding Plan 配置
+
+本项目使用 OpenAI 兼容协议。Coding Plan 的 `OPENAI_BASE_URL` 应填写：
+
+```text
+https://ark.cn-beijing.volces.com/api/coding/v3
+```
+
+`https://ark.cn-beijing.volces.com/api/coding` 是 Anthropic 协议入口，直接填入本项目会导致请求返回 404。协议与地址对应关系见 [火山方舟官方说明](https://docs.volcengine.com/docs/ark/coding-plan-personal-ai-hermes-agent?lang=en)。模型和密钥使用自己账号的有效配置。
+
+修改后端源码后，需要在构建任务结束后通过终端重新启动后端；普通模式不自动重新加载代码。重新双击 `.command` 遇到健康的旧进程时，也不会强制重启它。
+
+整批建图前，可先运行 `python docs/smoke_extract.py`：使用内置短文本，通过两次真实模型调用检查文档抽取、问题实体抽取和图谱保存／重载。检查使用临时目录，不修改原有文档或图谱；需要先安装项目依赖并配置模型。
 
 ## 说明与限制
 

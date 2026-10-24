@@ -9,6 +9,7 @@ from fastapi import APIRouter, HTTPException, Query, UploadFile
 from fastapi.responses import PlainTextResponse
 
 from graphrag.config import fresh_llm_config, settings, write_env
+from graphrag.llm.extractor import QueryExtractionError
 from graphrag.pipeline.service import service
 from graphrag.schemas.api import BuildRequest, QueryRequest
 
@@ -40,6 +41,9 @@ def _save_history(history: list[dict]) -> None:
 def _start_build_job(doc_ids: Optional[list[str]]) -> str:
     job_id = uuid.uuid4().hex[:12]
     with _jobs_lock:
+        for existing_id, state in _jobs.items():
+            if state["status"] == "running":
+                return existing_id
         _jobs[job_id] = {"status": "running", "processed": 0, "total": 0, "error": None}
 
     def _run():
@@ -106,6 +110,15 @@ def build_status(job_id: str):
     if job is None:
         raise HTTPException(status_code=404, detail=f"任务不存在: {job_id}")
     return job
+
+
+@router.get("/graph/build/current")
+def current_build():
+    with _jobs_lock:
+        jobs = list(_jobs.items())
+        current = next(((key, state) for key, state in reversed(jobs) if state["status"] == "running"),
+                       jobs[-1] if jobs else None)
+        return {"job_id": current[0], **current[1]} if current else {"job_id": None}
 
 
 @router.get("/graph/stats")
@@ -259,13 +272,16 @@ def control_restart():
 
 @router.post("/query")
 def query(body: QueryRequest):
-    result = service.answer(
-        question=body.question,
-        hops=body.hops,
-        max_nodes=body.max_nodes,
-        max_edges=body.max_edges,
-        seed_override=body.seed_override,
-    )
+    try:
+        result = service.answer(
+            question=body.question,
+            hops=body.hops,
+            max_nodes=body.max_nodes,
+            max_edges=body.max_edges,
+            seed_override=body.seed_override,
+        )
+    except QueryExtractionError as exc:
+        raise HTTPException(status_code=502, detail=str(exc)) from exc
     history_list = _load_history()
     history_list.append(
         {

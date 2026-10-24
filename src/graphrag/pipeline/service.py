@@ -2,7 +2,8 @@ import hashlib
 import logging
 import threading
 import time
-from concurrent.futures import ThreadPoolExecutor
+from concurrent.futures import ThreadPoolExecutor, as_completed
+from copy import deepcopy
 from pathlib import Path
 
 from langchain_core.prompts import ChatPromptTemplate
@@ -73,7 +74,12 @@ class RagService:
 
         total = len(todo)
         if progress:
-            progress({"status": "running", "processed": 0, "total": total, "error": None})
+            progress({"status": "running", "processed": 0, "total": total, "failed": 0, "error": None})
+
+        # ponytail: 小语料按批次复制整图保存检查点；大图时改用事务存储。
+        working_store = deepcopy(self.store) if todo else None
+        saved_success_count = 0
+        checkpoint_processed = 0
 
         def extract_task(item):
             cid, text, h = item
@@ -84,34 +90,65 @@ class RagService:
             futures = [pool.submit(extract_task, item) for item in todo]
             done = 0
             failed = 0
-            for future in futures:
+            for future in as_completed(futures):
                 cid, h, ext = future.result()
                 if ext is not None:
-                    with self._lock:
-                        self.store.add_extraction(ext, cid)
-                    self.store.meta.setdefault("processed_chunks", {})[cid] = h
+                    working_store.add_extraction(ext, cid)
+                    working_store.meta.setdefault("processed_chunks", {})[cid] = h
                 else:
                     failed += 1
                 done += 1
+                if done - failed > saved_success_count and (
+                    saved_success_count == 0 or done % settings.build_checkpoint_interval == 0 or done == total
+                ):
+                    snapshot = deepcopy(working_store)
+                    snapshot.meta["built_at"] = time.strftime("%Y-%m-%d %H:%M:%S")
+                    snapshot.save()
+                    with self._lock:
+                        self.store.G = snapshot.G
+                        self.store.resolver = snapshot.resolver
+                        self.store.meta = snapshot.meta
+                    saved_success_count = done - failed
+                    checkpoint_processed = done
                 if progress:
-                    progress({"status": "running", "processed": done, "total": total, "error": None})
+                    progress({
+                        "status": "running", "processed": done, "total": total,
+                        "failed": failed, "error": None,
+                        "nodes": working_store.G.number_of_nodes(),
+                        "edges": working_store.G.number_of_edges(),
+                        "checkpoint_processed": checkpoint_processed,
+                    })
 
-        self.store.meta["built_at"] = time.strftime("%Y-%m-%d %H:%M:%S")
-        self.store.save()
-        stats = self.store.stats()
+        error = None
+        if total and failed == total:
+            status = "error"
+            error = "全部分块抽取失败，请检查模型配置或后端日志后重试。当前图谱未更新。"
+            message = error
+        elif failed:
+            status = "partial"
+            message = "已保存成功抽取的结果；再次点击构建可重试失败分块。"
+        else:
+            status = "done"
+            if not records:
+                message = "没有可构建的分块，请先上传有效文档。"
+            elif not total:
+                message = "所有分块均已处理，无需重复构建。"
+            else:
+                message = "构建结果已保存。"
+
+        result = {
+            "status": status,
+            "processed": done,
+            "total": total,
+            "failed": failed,
+            "error": error,
+            "message": message,
+            "checkpoint_processed": checkpoint_processed,
+            **self.store.stats(),
+        }
         if progress:
-            progress(
-                {
-                    "status": "done",
-                    "processed": done,
-                    "total": total,
-                    "nodes": stats["nodes"],
-                    "edges": stats["edges"],
-                    "failed": failed,
-                    "error": None,
-                }
-            )
-        return {"processed": done, "failed": failed, **stats}
+            progress(result)
+        return result
 
     # ---------- query ----------
 

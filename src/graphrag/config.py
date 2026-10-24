@@ -1,5 +1,7 @@
 from pathlib import Path
+from typing import Literal
 
+from pydantic import Field
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 ROOT_DIR = Path(__file__).resolve().parent.parent.parent
@@ -17,6 +19,7 @@ class Settings(BaseSettings):
     temperature_extract: float = 0.1
     temperature_answer: float = 0.3
     structured_output_method: str = "json_mode"
+    extraction_thinking: Literal["enabled", "disabled"] | None = None
 
     # 分块
     chunk_size: int = 600
@@ -25,6 +28,7 @@ class Settings(BaseSettings):
     # 图谱与数据目录
     data_dir: Path = ROOT_DIR / "data"
     extraction_concurrency: int = 4
+    build_checkpoint_interval: int = Field(default=50, ge=1)
 
     @property
     def documents_dir(self) -> Path:
@@ -73,4 +77,5 @@ def fresh_llm_config() -> dict:
         "temperature_extract": s.temperature_extract,
         "temperature_answer": s.temperature_answer,
         "structured_output_method": s.structured_output_method,
+        "extraction_thinking": s.extraction_thinking,
     }

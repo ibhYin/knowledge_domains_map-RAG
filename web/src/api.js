@@ -8,7 +8,9 @@ async function request(path, options = {}) {
     } catch {
       /* ignore */
     }
-    throw new Error(detail)
+    const error = new Error(detail)
+    error.status = resp.status
+    throw error
   }
   return resp.json()
 }
@@ -37,6 +39,7 @@ export const api = {
   // 图谱
   buildGraph: (docIds = null) => postJSON('/api/graph/build', { doc_ids: docIds }),
   buildStatus: (jobId) => request(`/api/graph/build/status/${jobId}`),
+  currentBuild: () => request('/api/graph/build/current'),
   graphStats: () => request('/api/graph/stats'),
   graphViz: () => request('/api/graph/viz'),
   clearGraph: () => postJSON('/api/graph/clear', {}),
@@ -51,12 +54,7 @@ export const api = {
   history: () => request('/api/history'),
   clearHistory: () => request('/api/history', { method: 'DELETE' }),
 
-  // 设置与系统控制
+  // 模型设置
   settings: () => request('/api/settings'),
   saveSettings: (payload) => postJSON('/api/settings', payload),
-  controlStatus: () => request('/api/control/status'),
-  controlLogs: (n = 100) => request(`/api/control/logs?n=${n}`),
-  controlStart: () => postJSON('/api/control/start', {}),
-  controlStop: () => postJSON('/api/control/stop', {}),
-  controlRestart: () => postJSON('/api/control/restart', {}),
 }
