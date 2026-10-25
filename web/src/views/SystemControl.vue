@@ -41,7 +41,7 @@
           <tr>
             <td>自动重载</td>
             <td>
-              <span v-if="!control" class="hint" style="margin: 0">控制服务未运行{{ statusError ? `：${statusError}` : '' }}</span>
+              <span v-if="!control" class="hint" style="margin: 0">后端重启中或控制服务不可用{{ statusError ? `：${statusError}` : '' }}（每 10 秒自动重试）</span>
               <span v-else-if="!control.autoreload_enabled" class="hint" style="margin: 0">已关闭（BACKEND_AUTORELOAD=0）</span>
               <span v-else-if="control.pending_reload" style="color: var(--danger)">已开启 · 有代码变更，等待构建结束后重载</span>
               <span v-else style="color: var(--success)">已开启 · 每 {{ control.autoreload_interval }} 秒检查源码</span>
