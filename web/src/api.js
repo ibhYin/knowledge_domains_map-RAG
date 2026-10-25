@@ -57,4 +57,7 @@ export const api = {
   // 模型设置
   settings: () => request('/api/settings'),
   saveSettings: (payload) => postJSON('/api/settings', payload),
+
+  // 控制服务（supervisor）
+  controlStatus: () => request('/api/control/status'),
 }

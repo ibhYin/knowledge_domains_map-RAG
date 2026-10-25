@@ -1,7 +1,9 @@
 import json
+import os
 import threading
 import time
 import uuid
+from pathlib import Path
 from typing import Optional
 
 import httpx
@@ -17,6 +19,23 @@ router = APIRouter(prefix="/api")
 
 _jobs: dict[str, dict] = {}
 _jobs_lock = threading.Lock()
+
+# 进程启动时记录，用于在页面上确认后端加载的是哪一版代码。
+_STARTED_AT = time.strftime("%Y-%m-%d %H:%M:%S")
+_SOURCE_ROOT = Path(__file__).resolve().parent.parent
+
+
+def _latest_code_mtime() -> str:
+    latest = 0.0
+    for path in _SOURCE_ROOT.rglob("*.py"):
+        try:
+            latest = max(latest, path.stat().st_mtime)
+        except OSError:
+            continue
+    return time.strftime("%Y-%m-%d %H:%M:%S", time.localtime(latest)) if latest else ""
+
+
+_CODE_MTIME = _latest_code_mtime()
 
 _HISTORY_FILE = settings.data_dir / "history.json"
 _HISTORY_LIMIT = 100
@@ -70,6 +89,9 @@ def health():
         "graph_loaded": service.store.G.number_of_nodes() > 0,
         "nodes": stats["nodes"],
         "edges": stats["edges"],
+        "pid": os.getpid(),
+        "started_at": _STARTED_AT,
+        "code_mtime": _CODE_MTIME,
     }
 
 

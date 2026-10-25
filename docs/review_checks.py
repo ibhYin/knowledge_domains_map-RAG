@@ -620,6 +620,57 @@ class ReviewChecks(unittest.TestCase):
         self.assertEqual(second["processed"], 0)
         self.assertEqual(extract.call_count, calls)
 
+    def test_health_reports_process_identity(self):
+        client = TestClient(app)
+        body = client.get("/api/health").json()
+        self.assertEqual(body["pid"], os.getpid())
+        self.assertTrue(body["started_at"])
+        self.assertTrue(body["code_mtime"])
+
+    def test_source_watcher_reloads_when_idle(self):
+        from graphrag.supervisor import app as supervisor_app
+
+        calls = []
+
+        class _Manager:
+            def restart(self, reason=""):
+                calls.append(reason)
+                return {"ok": True, "message": "restarted"}
+
+        with patch.object(supervisor_app.SourceWatcher, "_scan", return_value={"a.py": 1.0}), \
+                patch.object(supervisor_app.SourceWatcher, "_build_running", return_value=False), \
+                patch.object(supervisor_app.time, "sleep", return_value=None):
+            watcher = supervisor_app.SourceWatcher(_Manager())
+            watcher._snapshot = {"a.py": 0.0}
+            watcher.poll_once()
+        self.assertEqual(len(calls), 1)
+        self.assertFalse(watcher.pending)
+
+    def test_source_watcher_defers_reload_while_build_running(self):
+        from graphrag.supervisor import app as supervisor_app
+
+        calls = []
+
+        class _Manager:
+            def restart(self, reason=""):
+                calls.append(reason)
+                return {"ok": True, "message": "restarted"}
+
+        with patch.object(supervisor_app.SourceWatcher, "_scan", return_value={"a.py": 1.0}), \
+                patch.object(supervisor_app.SourceWatcher, "_build_running", return_value=True), \
+                patch.object(supervisor_app.time, "sleep", return_value=None):
+            watcher = supervisor_app.SourceWatcher(_Manager())
+            watcher._snapshot = {"a.py": 0.0}
+            watcher.poll_once()
+        self.assertEqual(calls, [])
+        self.assertTrue(watcher.pending)
+
+        with patch.object(supervisor_app.SourceWatcher, "_build_running", return_value=False), \
+                patch.object(supervisor_app.time, "sleep", return_value=None):
+            watcher.poll_once()
+        self.assertEqual(len(calls), 1)
+        self.assertFalse(watcher.pending)
+
     def test_unicode_normalization(self):
         self.assertEqual(normalize(" ＡＩ （测试） "), normalize("ai(测试)"))
 

@@ -1,6 +1,7 @@
 #!/usr/bin/env bash
 # GraphRAG 启动脚本
-#   ./start.sh            # 启动控制台 http://localhost:8001（推荐入口，等价双击 .command）
+#   ./start.sh            # 启动问答系统（会先清理端口上的旧后端）
+#   ./start.sh restart    # 重启后端（构建中会询问；--force 跳过；--supervisor 连控制服务一起重启）
 #   ./start.sh dev        # 开发模式：前端 :5173 + 后端 :8002（热更新）
 set -uo pipefail
 
@@ -8,6 +9,12 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 cd "$SCRIPT_DIR"
 
 MODE="${1:-prod}"
+
+if [ "$MODE" = "restart" ]; then
+  shift || true
+  exec bash "$SCRIPT_DIR/scripts/restart.sh" "$@"
+fi
+
 CONTROL_PORT=8001
 BACKEND_PORT=8002
 FRONTEND_PORT=5173
