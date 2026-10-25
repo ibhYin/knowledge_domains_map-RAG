@@ -523,6 +523,92 @@ class ReviewChecks(unittest.TestCase):
         self.assertEqual(restored.G.number_of_nodes(), 2)
         self.assertEqual(restored.meta["processed_chunks"], {"doc:0": "hash"})
 
+    def test_buffered_results_publish_while_next_model_call_is_waiting(self):
+        service = RagService()
+        first_saved, second_saved = threading.Event(), threading.Event()
+        states = []
+        records = [{"content": text, "chunk_index": i, "metadata": {"doc_id": "doc"}}
+                   for i, text in enumerate(("first", "second", "last"))]
+
+        def extract(text):
+            if text == "second":
+                self.assertTrue(first_saved.wait(3))
+            elif text == "last":
+                self.assertTrue(second_saved.wait(3), "Buffered results were waiting for another model response")
+            return ChunkExtraction(entities=[entity(text)])
+
+        def progress(state):
+            states.append(dict(state))
+            if state["processed"] == 1 and state.get("checkpoint_processed") == 1:
+                first_saved.set()
+            if state["processed"] == 2 and state.get("checkpoint_processed") == 2:
+                second_saved.set()
+
+        with patch.object(service.chunks, "iter_chunks", return_value=records), \
+             patch.object(settings, "build_checkpoint_interval", 100), \
+             patch.object(settings, "build_publish_interval", 0.1), \
+             patch.object(EntityExtractor, "extract", side_effect=extract):
+            result = service.build_graph(progress=progress)
+        self.assertEqual(result["status"], "done")
+        self.assertTrue(any(s["processed"] == 2 and s.get("checkpoint_processed") == 1 for s in states))
+        versions = [s["graph_version"] for s in states]
+        self.assertEqual(versions, sorted(versions))
+        self.assertEqual(result["graph_version"], 3)
+
+    def test_graph_versions_advance_only_on_committed_saves(self):
+        store = GraphStore()
+        store.add_extraction(extraction(), "doc:0")
+        store.save()
+        self.assertEqual(store.meta["graph_version"], 1)
+        with patch("graphrag.graph.persistence.os.replace", side_effect=OSError("disk full")):
+            with self.assertRaises(OSError):
+                store.save()
+        self.assertEqual(store.meta["graph_version"], 1)
+        store.save()
+        self.assertEqual(store.meta["graph_version"], 2)
+        restored = GraphStore()
+        restored.load()
+        self.assertEqual(restored.meta["graph_version"], 2)
+
+    def test_preview_has_consistent_version_counts_and_stable_bounded_ids(self):
+        service = RagService()
+        for name in ("a", "b", "c", "d"):
+            service.store.upsert_entity(entity(name), "doc:0")
+        for u in service.store.G:
+            for v in service.store.G:
+                if u != v:
+                    for relation in ("USES", "RELATED_TO", "PARTNERS_WITH"):
+                        service.store.G.add_edge(u, v, key=relation, weight=1)
+        service.store.save()
+        with patch.object(routes, "service", service):
+            client = TestClient(app)
+            preview = client.get("/api/graph/viz?limit=3").json()
+            repeated = client.get("/api/graph/viz?limit=3").json()
+            self.assertEqual(client.get("/api/graph/viz?limit=0").status_code, 422)
+            self.assertEqual(client.get("/api/graph/viz?limit=1001").status_code, 422)
+        self.assertEqual(preview["graph_version"], preview["stats"]["graph_version"])
+        self.assertEqual((preview["stats"]["nodes"], preview["stats"]["edges"]), (4, 36))
+        self.assertEqual((len(preview["nodes"]), len(preview["links"])), (3, 9))
+        self.assertTrue(preview["truncated"])
+        self.assertEqual(preview, repeated)
+        ids = {n["id"] for n in preview["nodes"]}
+        self.assertTrue(all(e["source"] in ids and e["target"] in ids for e in preview["links"]))
+        self.assertEqual(len({e["id"] for e in preview["links"]}), len(preview["links"]))
+
+    def test_running_build_blocks_clear_and_document_delete(self):
+        service = RagService()
+        service.store.add_extraction(extraction(), "doc:0")
+        with patch.object(routes, "service", service), \
+             patch.object(routes, "_jobs", {"test": {"status": "running"}}), \
+             patch.object(service.chunks, "delete_document") as delete, \
+             patch.object(service.store, "save") as save:
+            client = TestClient(app)
+            self.assertEqual(client.post("/api/graph/clear", json={}).status_code, 409)
+            self.assertEqual(client.delete("/api/documents/example").status_code, 409)
+        delete.assert_not_called()
+        save.assert_not_called()
+        self.assertEqual(service.store.G.number_of_nodes(), 2)
+
     def test_unchanged_chunks_skip_extraction(self):
         service = RagService()
         service.ingest([("sample.txt", "星辰科技与清华大学合作。".encode())])

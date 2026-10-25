@@ -1,4 +1,6 @@
+import json
 import logging
+from itertools import islice
 
 import networkx as nx
 
@@ -12,6 +14,7 @@ DEFAULT_META = {
     "processed_chunks": {},
     "built_at": None,
     "stats": {},
+    "graph_version": 0,
 }
 
 logger = logging.getLogger(__name__)
@@ -33,10 +36,12 @@ class GraphStore:
         self.resolver = EntityResolver(self.meta.get("alias_map", {}))
 
     def save(self) -> None:
-        self.meta["alias_map"] = self.resolver.to_dict()
-        self.meta["stats"] = self.stats()
+        meta = {**self.meta, "alias_map": self.resolver.to_dict(),
+                "graph_version": self.meta.get("graph_version", 0) + 1}
+        meta["stats"] = {**self.stats(), "graph_version": meta["graph_version"]}
         # 图和成功处理记录同一快照原子提交，meta.json 仅兼容旧工具。
-        save_graph(self.G, settings.graph_file, self.meta)
+        save_graph(self.G, settings.graph_file, meta)
+        self.meta = meta
         try:
             save_meta(self.meta, settings.graph_meta_file)
         except OSError as exc:
@@ -124,9 +129,12 @@ class GraphStore:
             "node_types": node_types,
             "edge_relations": edge_relations,
             "built_at": self.meta.get("built_at"),
+            "graph_version": self.meta.get("graph_version", 0),
         }
 
-    def to_viz_data(self) -> dict:
+    def to_viz_data(self, limit: int = 300) -> dict:
+        selected = list(islice(self.G.nodes(data=True), limit))
+        node_ids = {n for n, _ in selected}
         nodes = [
             {
                 "id": n,
@@ -135,18 +143,24 @@ class GraphStore:
                 "description": data.get("description", ""),
                 "mention_count": data.get("mention_count", 0),
             }
-            for n, data in self.G.nodes(data=True)
+            for n, data in selected
         ]
+        edges = (edge for edge in self.G.edges([n for n, _ in selected], keys=True, data=True)
+                 if edge[1] in node_ids)
         links = [
             {
+                "id": json.dumps([u, v, key], ensure_ascii=False, separators=(",", ":")),
                 "source": u,
                 "target": v,
                 "relation": key,
                 "weight": data.get("weight", 1),
             }
-            for u, v, key, data in self.G.edges(keys=True, data=True)
+            for u, v, key, data in islice(edges, limit * 3)
         ]
-        return {"nodes": nodes, "links": links}
+        stats = self.stats()
+        return {"nodes": nodes, "links": links, "stats": stats,
+                "graph_version": stats["graph_version"],
+                "truncated": stats["nodes"] > len(nodes) or stats["edges"] > len(links)}
 
     def subgraph_viz(self, subgraph: nx.MultiDiGraph, edges: list) -> dict:
         edge_set = {(u, v, k) for u, v, k, _ in edges}

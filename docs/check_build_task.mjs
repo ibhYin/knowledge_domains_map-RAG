@@ -17,12 +17,14 @@ let state = { status: 'running', processed: 7, total: 20, failed: 0 }
 let failure = null
 let discoveryFailure = null
 let currentId = null
+let snapshot = null
+let vizCalls = 0
 const api = {
   currentBuild: async () => { if (discoveryFailure) throw discoveryFailure; return { job_id: currentId } },
   buildGraph: async () => { starts++; return { job_id: id } },
   buildStatus: async () => { if (failure) throw failure; return { ...state } },
   graphStats: async () => ({ nodes: 0, edges: 0 }),
-  graphViz: async () => ({ nodes: [], links: [] }),
+  graphViz: async () => { vizCalls++; return snapshot || { nodes: [], links: [] } },
   clearGraph: async () => ({}),
 }
 
@@ -37,7 +39,9 @@ async function mount(storage = new Map(), href = 'http://localhost:8002/', boots
     clearTimeout: timer => timers.delete(timer),
   })
   const dependencies = {
-    vue: { computed: vue.computed, ref: vue.ref, watch: vue.watch, onMounted: fn => { hooks.mount = fn }, onBeforeUnmount: fn => { hooks.unmount = fn } },
+    vue: { computed: vue.computed, ref: vue.ref, watch: vue.watch,
+      onMounted: fn => { hooks.mount = fn }, onBeforeUnmount: fn => { hooks.unmount = fn },
+      onActivated: fn => { hooks.activate = fn }, onDeactivated: fn => { hooks.deactivate = fn } },
     '../api': { api },
     '../components/GraphViz.vue': { default: {} },
   }
@@ -119,4 +123,54 @@ await completed.component.clearGraph()
 assert.equal(completed.storage.has(key), false)
 assert.equal(completed.component.job.value, null)
 assert.equal(starts, 1)
-console.log('PASS: server discovery, rollout bootstrap, global progress events, persistence, reload/deep-link restore, duplicate guard, reconnect, missing task and cleanup')
+function graph(version, count = version) {
+  const nodes = Array.from({ length: count }, (_, i) => ({ id: `n${i}`, name: `实体${i}` }))
+  const links = nodes.slice(1).map((n, i) => ({ source: `n${i}`, target: n.id, relation: 'USES' }))
+  return { graph_version: version, nodes, links, stats: { graph_version: version, nodes: count, edges: links.length } }
+}
+currentId = id
+state = { status: 'running', processed: 1, total: 20, failed: 0, graph_version: 1 }
+snapshot = graph(1)
+const growing = await mount()
+assert.equal(growing.component.viz.value.nodes.length, 1)
+const calls = vizCalls
+await growing.component.poll(id)
+assert.equal(vizCalls, calls, 'Do not refetch a graph whose published version has not changed')
+state = { ...state, processed: 2, graph_version: 2 }
+snapshot = graph(2)
+await growing.component.poll(id)
+assert.equal(growing.component.viz.value.nodes.length, 2)
+assert.equal(growing.component.stats.value.nodes, 2)
+assert.equal(growing.component.publishedVersion.value, 2)
+growing.hooks.deactivate()
+state = { ...state, processed: 3, graph_version: 3 }
+snapshot = graph(3)
+const hiddenCalls = vizCalls
+await growing.component.poll(id)
+assert.equal(vizCalls, hiddenCalls, 'Keep progress polling while avoiding hidden graph rendering')
+await growing.hooks.activate()
+assert.equal(growing.component.viz.value.nodes.length, 3)
+
+const graphApi = api.graphViz
+let deliverOld
+api.graphViz = () => new Promise(resolve => { deliverOld = resolve })
+const olderRequest = growing.component.refresh()
+api.graphViz = async () => graph(5)
+await growing.component.refresh()
+deliverOld(graph(4))
+await olderRequest
+assert.equal(growing.component.publishedVersion.value, 5, 'Late responses must not overwrite a newer graph')
+api.graphViz = async () => { throw new Error('snapshot unavailable') }
+await growing.component.refresh()
+assert.equal(growing.component.viz.value.nodes.length, 5)
+assert.equal(growing.component.graphError.value, 'snapshot unavailable')
+api.graphViz = async () => graph(6, 400)
+await growing.component.refresh()
+assert.equal(growing.component.viz.value.nodes.length, 300)
+assert.equal(growing.component.stats.value.nodes, 400)
+assert.equal(growing.component.viz.value.truncated, true)
+assert.equal(growing.component.graphError.value, '')
+api.graphViz = graphApi
+growing.hooks.unmount()
+assert.equal(growing.timers.size, 0)
+console.log('PASS: task recovery, published-version growth, consistent counts, hidden-view gating, stale/error retention and preview bounds')

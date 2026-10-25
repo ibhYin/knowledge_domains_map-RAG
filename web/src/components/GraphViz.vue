@@ -4,7 +4,7 @@
 
 <script setup>
 import * as echarts from 'echarts'
-import { onBeforeUnmount, onMounted, ref, watch } from 'vue'
+import { onActivated, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 
 const props = defineProps({
   nodes: { type: Array, default: () => [] },
@@ -14,6 +14,7 @@ const props = defineProps({
 
 const el = ref(null)
 let chart = null
+let selectedId = null
 
 const TYPE_CN = {
   PERSON: '人物', ORG: '组织', LOCATION: '地点',
@@ -32,8 +33,15 @@ const RELATION_CN = {
   INVENTED_BY: '发明者', PARTNERS_WITH: '合作', USES: '使用', IN_PERIOD: '时间归属',
 }
 
-function render(selected = null) {
-  if (!chart || !props.nodes.length) return
+function render(selected = selectedId) {
+  if (!chart) return
+  if (!props.nodes.length) {
+    selectedId = null
+    chart.clear()
+    return
+  }
+  selected = props.nodes.some((n) => n.id === selected) ? selected : null
+  selectedId = selected
   const neighborIds = new Set()
   if (selected) {
     for (const l of props.links) {
@@ -58,7 +66,7 @@ function render(selected = null) {
       tooltip: {
         formatter: () => {
           const typeCn = TYPE_CN[n.type] || n.type || '未知'
-          return `<b>${n.name}</b><br/>类型：${typeCn}<br/>描述：${n.description || '（无）'}<br/>出现次数：${n.mention_count || 0}`
+          return `<b>${echarts.format.encodeHTML(n.name)}</b><br/>类型：${echarts.format.encodeHTML(typeCn)}<br/>描述：${echarts.format.encodeHTML(n.description || '（无）')}<br/>出现次数：${echarts.format.encodeHTML(String(n.mention_count || 0))}`
         },
       },
     }
@@ -66,6 +74,7 @@ function render(selected = null) {
   const linkData = props.links.map((l) => {
     const active = selected ? l.source === selected || l.target === selected || (neighborIds.has(l.source) && neighborIds.has(l.target)) : true
     return {
+      id: l.id || JSON.stringify([l.source, l.target, l.relation]),
       source: l.source,
       target: l.target,
       value: l.relation,
@@ -81,7 +90,7 @@ function render(selected = null) {
         color: '#888',
         formatter: RELATION_CN[l.relation] || l.relation,
       },
-      tooltip: { formatter: RELATION_CN[l.relation] || l.relation },
+      tooltip: { formatter: echarts.format.encodeHTML(RELATION_CN[l.relation] || l.relation || '') },
     }
   })
   const categories = [...new Set(Object.values(categoryById))].map((t) => ({
@@ -89,7 +98,10 @@ function render(selected = null) {
   }))
   chart.setOption(
     {
-      tooltip: { trigger: 'item', formatter: (p) => p.data?.tooltip?.formatter?.() || '' },
+      tooltip: { trigger: 'item', formatter: (p) => {
+        const formatter = p.data?.tooltip?.formatter
+        return typeof formatter === 'function' ? formatter() : formatter || ''
+      } },
       legend: {
         bottom: 0,
         data: categories.map((c) => c.name),
@@ -98,6 +110,7 @@ function render(selected = null) {
       animationDuration: 500,
       series: [
         {
+          id: 'knowledge-graph',
           type: 'graph',
           layout: 'force',
           data: nodeData,
@@ -111,7 +124,7 @@ function render(selected = null) {
         },
       ],
     },
-    true,
+    { notMerge: false, lazyUpdate: true },
   )
 }
 
@@ -126,6 +139,7 @@ onMounted(() => {
   chart.on('click', onNodeClick)
   render()
 })
+onActivated(() => { if (chart) chart.resize() })
 
 onBeforeUnmount(() => {
   if (chart) {
@@ -134,7 +148,7 @@ onBeforeUnmount(() => {
   }
 })
 
-watch(() => [props.nodes, props.links], () => render(), { deep: true })
+watch(() => [props.nodes, props.links], () => render())
 watch(() => props.height, (h) => {
   if (el.value) el.value.style.height = h
   if (chart) chart.resize()

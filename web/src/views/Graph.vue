@@ -8,7 +8,7 @@
         <button class="btn btn-success" :disabled="building" @click="startBuild">
           {{ building ? '构建中…' : '构建图谱' }}
         </button>
-        <button class="btn btn-ghost" @click="refresh">刷新统计</button>
+        <button class="btn btn-ghost" @click="refresh">刷新图谱</button>
         <button v-if="job?.status === 'unknown'" class="btn btn-ghost" @click="restoreBuild">重连进度</button>
         <button class="btn btn-danger" :disabled="building" @click="clearGraph">清空图谱</button>
       </div>
@@ -35,21 +35,26 @@
 
     <div class="stat-grid">
       <div class="stat-card">
-        <div class="num">{{ job?.status === 'running' ? (job.nodes ?? (stats.nodes || '等待发布')) : (stats.nodes ?? '—') }}</div>
-        <div class="label">{{ job?.status === 'running' ? '构建中实体（含暂存）' : '实体节点' }}</div>
+        <div class="num">{{ stats.nodes ?? '—' }}</div>
+        <div class="label">已保存实体</div>
       </div>
       <div class="stat-card orange">
-        <div class="num">{{ job?.status === 'running' ? (job.edges ?? (stats.edges || '等待发布')) : (stats.edges ?? '—') }}</div>
-        <div class="label">{{ job?.status === 'running' ? '构建中关系（含暂存）' : '关系边' }}</div>
+        <div class="num">{{ stats.edges ?? '—' }}</div>
+        <div class="label">已保存关系</div>
       </div>
       <div class="stat-card green" v-if="stats.built_at">
         <div class="num" style="font-size:15px;line-height:28px">{{ stats.built_at }}</div>
-        <div class="label">上次构建</div>
+        <div class="label">最近保存</div>
       </div>
     </div>
 
     <div class="card">
       <div class="card-title">图谱可视化</div>
+      <p v-if="graphError" class="error-text" role="alert">图谱更新失败：{{ graphError }}。已保留上一次显示结果，将在下一次轮询重试。</p>
+      <p v-if="viz.truncated" class="muted">
+        完整图谱有 {{ stats.nodes }} 个实体、{{ stats.edges }} 条关系；当前画布展示 {{ viz.nodes.length }} 个实体、{{ viz.links.length }} 条关系。
+        <button class="btn btn-ghost btn-sm" @click="emit('nav', 'explorer')">到图谱浏览器查看其他实体</button>
+      </p>
       <div class="type-legend">
         <span v-for="t in typeStats" :key="t.type" class="chip">{{ typeCn(t.type) }} {{ t.count }}</span>
       </div>
@@ -61,7 +66,7 @@
 </template>
 
 <script setup>
-import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue'
+import { computed, onActivated, onBeforeUnmount, onDeactivated, onMounted, ref, watch } from 'vue'
 import { api } from '../api'
 import GraphViz from '../components/GraphViz.vue'
 
@@ -72,11 +77,14 @@ const viz = ref({ nodes: [], links: [] })
 const activeJobId = ref(null)
 const JOB_KEY = 'graphrag.buildJobId'
 const lastPolledAt = ref('')
-const emit = defineEmits(['build-progress'])
+const graphError = ref('')
+const publishedVersion = ref(null)
+const emit = defineEmits(['build-progress', 'nav'])
 watch(job, (state) => emit('build-progress', state), { flush: 'sync' })
 let pollTimer = null
 let disposed = false
-let savedCheckpoint = 0
+let graphLoaded = false
+let viewActive = true
 
 const TYPE_CN = { PERSON: '人物', ORG: '组织', LOCATION: '地点', CONCEPT: '概念', TIME: '时间', EVENT: '事件' }
 const typeCn = (t) => TYPE_CN[t] || t
@@ -88,17 +96,30 @@ const progressWidth = computed(() => {
 })
 
 async function refresh() {
+  const requestedJob = activeJobId.value
   try {
-    stats.value = await api.graphStats()
-    viz.value = await api.graphViz()
+    const snapshot = await api.graphViz(300)
+    // 旧后端尚未提供同版本统计；本轮过渡期仍能读取其已保存图谱。
+    const snapshotStats = snapshot.stats || await api.graphStats()
+    if (disposed || !viewActive || requestedJob !== activeJobId.value) return
+    if (snapshot.graph_version != null && publishedVersion.value != null && snapshot.graph_version < publishedVersion.value) return
+    const nodes = snapshot.nodes.slice(0, 300)
+    const ids = new Set(nodes.map((n) => n.id))
+    const links = snapshot.links.filter((l) => ids.has(l.source) && ids.has(l.target)).slice(0, 900)
+    stats.value = snapshotStats
+    viz.value = { ...snapshot, nodes, links, truncated: snapshot.truncated || snapshotStats.nodes > nodes.length || snapshotStats.edges > links.length }
+    publishedVersion.value = snapshot.graph_version ?? null
+    graphError.value = ''
+    graphLoaded = true
   } catch (e) {
-    /* ignore */
+    if (!disposed && viewActive && requestedJob === activeJobId.value) graphError.value = e.message
   }
 }
 
 async function startBuild() {
   if (building.value) return
-  savedCheckpoint = 0
+  publishedVersion.value = null
+  graphLoaded = false
   building.value = true
   job.value = { status: 'running', processed: 0, total: 0 }
   try {
@@ -121,15 +142,13 @@ async function poll(jobId) {
     if (disposed) return
     job.value = state
     lastPolledAt.value = new Date().toLocaleTimeString('zh-CN', { hour12: false })
-    if (state.checkpoint_processed > savedCheckpoint) {
-      savedCheckpoint = state.checkpoint_processed
+    if (viewActive && (!graphLoaded || state.status !== 'running' || (state.graph_version != null && state.graph_version !== publishedVersion.value))) {
       await refresh()
     }
     if (state.status === 'running') {
       pollTimer = setTimeout(() => poll(jobId), 1500)
     } else {
       building.value = false
-      await refresh()
     }
   } catch (e) {
     if (disposed) return
@@ -152,6 +171,9 @@ async function clearGraph() {
   viz.value = { nodes: [], links: [] }
   job.value = null
   activeJobId.value = null
+  publishedVersion.value = null
+  graphLoaded = false
+  graphError.value = ''
   localStorage.removeItem(JOB_KEY)
 }
 
@@ -171,7 +193,10 @@ async function restoreBuild() {
   }
   if (disposed) return
   if (savedJobId && /^[a-f0-9]{12}$/.test(savedJobId)) {
-    if (savedJobId !== activeJobId.value) savedCheckpoint = 0
+    if (savedJobId !== activeJobId.value) {
+      publishedVersion.value = null
+      graphLoaded = false
+    }
     activeJobId.value = savedJobId
     localStorage.setItem(JOB_KEY, savedJobId)
     building.value = true
@@ -182,10 +207,15 @@ async function restoreBuild() {
     url.searchParams.delete('build_job')
     window.history.replaceState(null, '', url)
   }
-  await refresh()
+  if (!graphLoaded && viewActive) await refresh()
 }
 
 onMounted(restoreBuild)
+onActivated(() => {
+  viewActive = true
+  if (graphLoaded) return refresh()
+})
+onDeactivated(() => { viewActive = false })
 onBeforeUnmount(() => {
   disposed = true
   clearTimeout(pollTimer)

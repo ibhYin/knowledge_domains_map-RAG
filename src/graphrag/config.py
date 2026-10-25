@@ -28,7 +28,8 @@ class Settings(BaseSettings):
     # 图谱与数据目录
     data_dir: Path = ROOT_DIR / "data"
     extraction_concurrency: int = 4
-    build_checkpoint_interval: int = Field(default=50, ge=1)
+    build_checkpoint_interval: int = Field(default=5, ge=1)
+    build_publish_interval: float = Field(default=2.0, gt=0)
 
     @property
     def documents_dir(self) -> Path:

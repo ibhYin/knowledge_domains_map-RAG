@@ -1,5 +1,6 @@
 <script setup>
-import { computed, markRaw, ref } from 'vue'
+import { computed, markRaw, onMounted, ref } from 'vue'
+import { api } from './api'
 import Dashboard from './views/Dashboard.vue'
 import Documents from './views/Documents.vue'
 import Graph from './views/Graph.vue'
@@ -21,6 +22,17 @@ const navs = [
 const active = ref(new URLSearchParams(window.location.search).has('build_job') || document.querySelector('meta[name="graphrag-build-job"]') ? 'graph' : 'dashboard')
 const buildProgress = ref(null)
 const ActiveComp = computed(() => navs.find((n) => n.key === active.value).comp)
+onMounted(async () => {
+  try {
+    const current = await api.currentBuild()
+    if (current.job_id && current.status === 'running') {
+      buildProgress.value = current
+      if (active.value === 'dashboard') active.value = 'graph'
+    }
+  } catch {
+    // 旧服务暂未提供任务发现接口，仍由图谱页的恢复信息处理。
+  }
+})
 </script>
 
 <template>

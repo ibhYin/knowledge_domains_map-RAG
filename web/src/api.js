@@ -41,7 +41,7 @@ export const api = {
   buildStatus: (jobId) => request(`/api/graph/build/status/${jobId}`),
   currentBuild: () => request('/api/graph/build/current'),
   graphStats: () => request('/api/graph/stats'),
-  graphViz: () => request('/api/graph/viz'),
+  graphViz: (limit = 300) => request(`/api/graph/viz?limit=${limit}`),
   clearGraph: () => postJSON('/api/graph/clear', {}),
 
   // 图谱浏览器

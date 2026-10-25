@@ -2,7 +2,7 @@ import hashlib
 import logging
 import threading
 import time
-from concurrent.futures import ThreadPoolExecutor, as_completed
+from concurrent.futures import FIRST_COMPLETED, ThreadPoolExecutor, wait
 from copy import deepcopy
 from pathlib import Path
 
@@ -74,7 +74,8 @@ class RagService:
 
         total = len(todo)
         if progress:
-            progress({"status": "running", "processed": 0, "total": total, "failed": 0, "error": None})
+            progress({"status": "running", "processed": 0, "total": total, "failed": 0,
+                      "graph_version": self.store.meta.get("graph_version", 0), "error": None})
 
         # ponytail: 小语料按批次复制整图保存检查点；大图时改用事务存储。
         working_store = deepcopy(self.store) if todo else None
@@ -87,19 +88,27 @@ class RagService:
             return cid, h, ext
 
         with ThreadPoolExecutor(max_workers=settings.extraction_concurrency) as pool:
-            futures = [pool.submit(extract_task, item) for item in todo]
+            pending = {pool.submit(extract_task, item) for item in todo}
             done = 0
             failed = 0
-            for future in as_completed(futures):
-                cid, h, ext = future.result()
-                if ext is not None:
-                    working_store.add_extraction(ext, cid)
-                    working_store.meta.setdefault("processed_chunks", {})[cid] = h
-                else:
-                    failed += 1
-                done += 1
+            last_published = time.monotonic()
+            while pending:
+                finished, pending = wait(pending, timeout=min(1.0, settings.build_publish_interval),
+                                         return_when=FIRST_COMPLETED)
+                for future in finished:
+                    cid, h, ext = future.result()
+                    if ext is not None:
+                        working_store.add_extraction(ext, cid)
+                        working_store.meta.setdefault("processed_chunks", {})[cid] = h
+                    else:
+                        failed += 1
+                    done += 1
+                published = False
                 if done - failed > saved_success_count and (
-                    saved_success_count == 0 or done % settings.build_checkpoint_interval == 0 or done == total
+                    saved_success_count == 0
+                    or done - failed - saved_success_count >= settings.build_checkpoint_interval
+                    or time.monotonic() - last_published >= settings.build_publish_interval
+                    or not pending
                 ):
                     snapshot = deepcopy(working_store)
                     snapshot.meta["built_at"] = time.strftime("%Y-%m-%d %H:%M:%S")
@@ -108,15 +117,19 @@ class RagService:
                         self.store.G = snapshot.G
                         self.store.resolver = snapshot.resolver
                         self.store.meta = snapshot.meta
+                    working_store.meta["graph_version"] = snapshot.meta["graph_version"]
                     saved_success_count = done - failed
                     checkpoint_processed = done
-                if progress:
+                    last_published = time.monotonic()
+                    published = True
+                if progress and (finished or published):
                     progress({
                         "status": "running", "processed": done, "total": total,
                         "failed": failed, "error": None,
                         "nodes": working_store.G.number_of_nodes(),
                         "edges": working_store.G.number_of_edges(),
                         "checkpoint_processed": checkpoint_processed,
+                        "graph_version": self.store.meta.get("graph_version", 0),
                     })
 
         error = None

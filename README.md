@@ -76,7 +76,7 @@ pip install fastapi python-docx    # 仅需补充这两个包
 | POST | `/api/graph/build` | 异步启动建图，返回 job_id |
 | GET | `/api/graph/build/status/{job_id}` | 构建进度 |
 | GET | `/api/graph/stats` | 图谱统计 |
-| GET | `/api/graph/viz` | 图谱数据（ECharts 格式） |
+| GET | `/api/graph/viz?limit=300` | 已保存图谱快照（含版本和完整统计，限制画布大小） |
 | POST | `/api/query` | 问答 `{question, hops, max_nodes}` |
 | GET | `/api/graph/export?fmt=graphml` | 导出图谱 |
 
@@ -90,14 +90,17 @@ pip install fastapi python-docx    # 仅需补充这两个包
 | `STRUCTURED_OUTPUT_METHOD` | `json_mode`（默认）/ `function_calling` / `json_schema` |
 | `CHUNK_SIZE` / `CHUNK_OVERLAP` | 分块大小/重叠（字符） |
 | `EXTRACTION_CONCURRENCY` | 抽取并发数 |
-| `BUILD_CHECKPOINT_INTERVAL` | 阶段保存间隔，默认 50 个已处理分块；首个成功结果立即保存 |
+| `BUILD_CHECKPOINT_INTERVAL` | 阶段保存间隔，默认新增 5 个成功分块；首个成功结果立即保存 |
+| `BUILD_PUBLISH_INTERVAL` | 有新结果时的最长批次等待时间，默认 2 秒；慢请求尚未返回时也会定时发布已完成结果 |
 | `EXTRACTION_THINKING` | 可选 enabled / disabled，仅对支持 thinking 参数的模型设置；只作用于文档和问题实体抽取，默认不发送该参数 |
 
 ### 长任务与进度
 
 新版后端可通过 `/api/graph/build/current` 找到当前任务，不依赖某个浏览器事先记住任务 ID。页面显示处理百分比、成功／失败数量、最近获取进度的时间；切换页面后顶部仍显示当前任务。
 
-分块按完成顺序合图，避免一个慢请求堵住后面已完成的进度。首个成功结果立即保存，之后按 `BUILD_CHECKPOINT_INTERVAL` 保存检查点。图谱与成功处理记录放入同一个原子快照；中断后重新启动并点击构建，可跳过已保存的成功分块。支持读取原有图谱格式；meta.json 保留为兼容镜像，以 graph.json 内的 metadata 为准。
+分块按完成顺序合图，避免一个慢请求堵住后面已完成的进度。首个成功结果立即保存，之后新增 5 个成功分块或有新结果等待 2 秒时保存、发布一版图谱。网页每 1.5 秒查询进度，发现版本变化才读取新的画布快照，构建途中也能看到节点与关系增长。图谱与成功处理记录放入同一个原子快照；中断后重新启动并点击构建，可跳过已保存的成功分块。支持读取原有图谱格式；meta.json 保留为兼容镜像，以 graph.json 内的 metadata 为准。
+
+实体／关系数量与画布来自同一已保存版本。默认画布最多展示前 300 个实体、900 条关系，并标明完整数量；完整图谱仍保存，可通过图谱浏览器查看其他实体。切到其他页面后继续查询任务进度，但暂停隐藏画布更新；返回后读取最新版本。新节点加入时复用已有节点 ID 和布局，保留缩放、平移及选中状态。
 
 若模型支持关闭深度思考，可配置 `EXTRACTION_THINKING=disabled`，先用短样例验证速度和抽取质量。切换到不支持 thinking 的服务时，应移除此配置；不应只为提速盲目增加并发。
 

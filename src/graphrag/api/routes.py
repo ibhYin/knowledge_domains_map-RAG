@@ -92,8 +92,11 @@ def list_documents():
 
 @router.delete("/documents/{doc_id}")
 def delete_document(doc_id: str):
-    if not service.chunks.delete_document(doc_id):
-        raise HTTPException(status_code=404, detail=f"文档不存在: {doc_id}")
+    with _jobs_lock:
+        if any(state["status"] == "running" for state in _jobs.values()):
+            raise HTTPException(status_code=409, detail="构建中不能删除文档，请等待任务结束。")
+        if not service.chunks.delete_document(doc_id):
+            raise HTTPException(status_code=404, detail=f"文档不存在: {doc_id}")
     return {"deleted": doc_id}
 
 
@@ -123,12 +126,14 @@ def current_build():
 
 @router.get("/graph/stats")
 def graph_stats():
-    return service.store.stats()
+    with service._lock:
+        return service.store.stats()
 
 
 @router.get("/graph/viz")
-def graph_viz():
-    return service.store.to_viz_data()
+def graph_viz(limit: int = Query(300, ge=1, le=1000)):
+    with service._lock:
+        return service.store.to_viz_data(limit=limit)
 
 
 @router.get("/graph/export")
@@ -152,8 +157,12 @@ def graph_export(fmt: str = "graphml"):
 
 @router.post("/graph/clear")
 def clear_graph():
-    service.store.clear()
-    service.store.save()
+    with _jobs_lock:
+        if any(state["status"] == "running" for state in _jobs.values()):
+            raise HTTPException(status_code=409, detail="构建中不能清空图谱，请等待任务结束。")
+        with service._lock:
+            service.store.clear()
+            service.store.save()
     return {"cleared": True}
 
 
