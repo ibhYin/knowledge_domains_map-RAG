@@ -14,7 +14,7 @@ class EntityResolver:
     """别名 → 规范 key 注册表。canonical_key 决定图节点的主键。"""
 
     def __init__(self, alias_map: dict[str, str] | None = None):
-        self.alias_map = alias_map or {}
+        self.alias_map = dict(alias_map or {})
         self.typed_map: dict[tuple[str, str], str] = {}
 
     def prepare(self, entities) -> None:

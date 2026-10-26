@@ -235,7 +235,13 @@ class ReviewChecks(unittest.TestCase):
 
     def test_processed_chunks_are_not_shared_between_stores(self):
         a, b = GraphStore(), GraphStore()
-        self.assertIsNot(a.meta["processed_chunks"], b.meta["processed_chunks"])
+        for initialize in (lambda s: None, lambda s: s.clear(), lambda s: s.load()):
+            initialize(a)
+            initialize(b)
+            for field in ("processed_chunks", "alias_map", "stats"):
+                self.assertIsNot(a.meta[field], b.meta[field])
+            a.meta["processed_chunks"]["doc:0"] = "digest"
+            self.assertEqual(b.meta["processed_chunks"], {})
 
     def test_delete_api_removes_facts_without_other_sources(self):
         service = RagService()

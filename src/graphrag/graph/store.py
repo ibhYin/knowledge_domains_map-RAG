@@ -1,5 +1,6 @@
 import json
 import logging
+from copy import deepcopy
 from itertools import islice
 
 import networkx as nx
@@ -24,7 +25,7 @@ class GraphStore:
     def __init__(self, graph: nx.MultiDiGraph | None = None, alias_map: dict[str, str] | None = None):
         self.G = graph if graph is not None else nx.MultiDiGraph()
         self.resolver = EntityResolver(alias_map)
-        self.meta = {**DEFAULT_META, "alias_map": dict(alias_map or {})}
+        self.meta = {**deepcopy(DEFAULT_META), "alias_map": dict(alias_map or {})}
         self._extractions: dict[str, ChunkExtraction] = {}
 
     # ---------- 持久化 ----------
@@ -33,7 +34,7 @@ class GraphStore:
         self.G, meta = load_graph(settings.graph_file)
         if meta is None:
             meta = load_meta(settings.graph_meta_file)
-        self.meta = {**DEFAULT_META, **meta}
+        self.meta = {**deepcopy(DEFAULT_META), **meta}
         self.resolver = EntityResolver(self.meta.get("alias_map", {}))
         self._extractions = {}
         from graphrag.pipeline.chunk_store import ChunkStore
@@ -57,7 +58,7 @@ class GraphStore:
     def clear(self) -> None:
         self.G = nx.MultiDiGraph()
         self.resolver = EntityResolver()
-        self.meta = {**DEFAULT_META}
+        self.meta = deepcopy(DEFAULT_META)
         self._extractions = {}
 
     # ---------- 构建 ----------
