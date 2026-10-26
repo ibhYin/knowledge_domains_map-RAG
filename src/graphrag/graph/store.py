@@ -231,7 +231,7 @@ class GraphStore:
         return None
 
     def expand(self, seeds: list[str], hops: int = 2, max_nodes: int = 40, max_edges: int = 80) -> tuple[nx.MultiDiGraph, list]:
-        seeds = [s for s in seeds if s in self.G]
+        seeds = list(dict.fromkeys(s for s in seeds if s in self.G))[:max(0, max_nodes)]
         if not seeds:
             return nx.MultiDiGraph(), []
         collected = set(seeds)

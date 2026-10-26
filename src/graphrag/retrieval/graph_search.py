@@ -1,6 +1,7 @@
 import networkx as nx
 
 from graphrag.graph.store import GraphStore
+from graphrag.graph.entity_resolver import normalize
 from graphrag.llm.extractor import QueryEntityExtractor
 
 
@@ -39,7 +40,13 @@ class GraphSearch:
                         "name": store.G.nodes[key].get("name", key),
                     }
                 )
-                seeds.append(key)
+                node = store.G.nodes[key]
+                score = 2 if name == key or normalize(name) == normalize(node.get("name", key)) else int(
+                    any(normalize(name) == normalize(a) for a in node.get("aliases", [])))
+                seeds.append((score, key))
+
+        seeds = list(dict.fromkeys(key for _, key in sorted(seeds, key=lambda item: item[0], reverse=True)))[:max_nodes]
+        matched = [match for match in matched if match["node"] in seeds]
 
         subgraph: nx.MultiDiGraph
         edges: list

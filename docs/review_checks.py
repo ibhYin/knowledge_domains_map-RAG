@@ -388,6 +388,18 @@ class ReviewChecks(unittest.TestCase):
         seeds = [store.upsert_entity(entity(name), "doc:0") for name in ("甲", "乙")]
         subgraph, _ = store.expand(seeds, max_nodes=1)
         self.assertLessEqual(subgraph.number_of_nodes(), 1)
+        self.assertEqual(store.expand(seeds, max_nodes=0)[0].number_of_nodes(), 0)
+        self.assertEqual(store.expand([seeds[0], seeds[0], seeds[1]], max_nodes=2)[0].number_of_nodes(), 2)
+
+    def test_exact_seed_matches_take_priority_over_partial_matches(self):
+        from graphrag.retrieval.graph_search import GraphSearch
+
+        store = GraphStore()
+        store.add_extraction(extraction(), "doc:0")
+        result = GraphSearch(store).search("问题", seed_override=["科技", "清华大学"], max_nodes=1)
+        self.assertEqual(result["seed_nodes"], [store.locate("清华大学")])
+        self.assertEqual(result["subgraph"].number_of_nodes(), 1)
+        self.assertEqual([m["name"] for m in result["matched_entities"]], ["清华大学"])
 
     def test_failed_extraction_is_not_reported_as_success(self):
         service = RagService()
