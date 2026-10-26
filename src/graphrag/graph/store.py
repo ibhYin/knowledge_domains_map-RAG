@@ -25,6 +25,7 @@ class GraphStore:
         self.G = graph if graph is not None else nx.MultiDiGraph()
         self.resolver = EntityResolver(alias_map)
         self.meta = {**DEFAULT_META, "alias_map": dict(alias_map or {})}
+        self._extractions: dict[str, ChunkExtraction] = {}
 
     # ---------- 持久化 ----------
 
@@ -34,6 +35,12 @@ class GraphStore:
             meta = load_meta(settings.graph_meta_file)
         self.meta = {**DEFAULT_META, **meta}
         self.resolver = EntityResolver(self.meta.get("alias_map", {}))
+        self._extractions = {}
+        from graphrag.pipeline.chunk_store import ChunkStore
+        for cid, digest in self.meta.get("processed_chunks", {}).items():
+            ext = ChunkStore().load_extraction(cid, digest, self.meta.get("extraction_fingerprint", ""))
+            if ext is not None:
+                self._extractions[cid] = ext
 
     def save(self) -> None:
         meta = {**self.meta, "alias_map": self.resolver.to_dict(),
@@ -51,31 +58,48 @@ class GraphStore:
         self.G = nx.MultiDiGraph()
         self.resolver = EntityResolver()
         self.meta = {**DEFAULT_META}
+        self._extractions = {}
 
     # ---------- 构建 ----------
 
     def add_extraction(self, ext: ChunkExtraction, chunk_id: str) -> tuple[int, int]:
-        entity_keys = {self.upsert_entity(e, chunk_id) for e in ext.entities}
-        valid_relations = [
-            r
-            for r in ext.relations
-            if self.resolver.canonical_key(r.source) in entity_keys
-            and self.resolver.canonical_key(r.target) in entity_keys
-        ]
-        for rel in valid_relations:
-            self.upsert_relation(rel, chunk_id)
-        return len(ext.entities), len(valid_relations)
+        self.rebuild({**self._extractions, chunk_id: ext})
+        return len(ext.entities), sum(chunk_id in d["source_chunks"] for *_, d in self.G.edges(data=True))
+
+    def rebuild(self, extractions: dict[str, ChunkExtraction]) -> None:
+        self._extractions = dict(extractions)
+        self.G = nx.MultiDiGraph()
+        self.resolver = EntityResolver()
+        self.resolver.prepare(e for ext in extractions.values() for e in ext.entities)
+        for cid, ext in sorted(extractions.items()):
+            endpoints: dict[str, set[str]] = {}
+            for ent in ext.entities:
+                key = self._merge_entity(ent, cid)
+                for name in [ent.name, *ent.aliases]:
+                    endpoints.setdefault(normalize_str(name), set()).add(key)
+            for rel in ext.relations:
+                sources, targets = endpoints.get(normalize_str(rel.source), set()), endpoints.get(normalize_str(rel.target), set())
+                if len(sources) == len(targets) == 1:
+                    self._merge_relation(rel, cid, next(iter(sources)), next(iter(targets)))
 
     def upsert_entity(self, ent: Entity, chunk_id: str) -> str:
-        key = self.resolver.register_aliases(ent.name, ent.aliases)
+        ext = self._extractions.get(chunk_id, ChunkExtraction()).model_copy(deep=True)
+        ext.entities.append(ent)
+        self.add_extraction(ext, chunk_id)
+        return self.resolver.entity_key(ent.name, ent.type.value)
+
+    def _merge_entity(self, ent: Entity, chunk_id: str) -> str:
+        key = self.resolver.entity_key(ent.name, ent.type.value)
         if key in self.G:
             n = self.G.nodes[key]
-            n["mention_count"] += 1
+            if normalize_str(n["name"]) != json.loads(key)[1] and normalize_str(ent.name) == json.loads(key)[1]:
+                n["name"] = ent.name
             if chunk_id not in n["source_chunks"]:
                 n["source_chunks"].append(chunk_id)
+                n["mention_count"] += 1
             if len(ent.description) > len(n.get("description", "")):
                 n["description"] = ent.description
-            for alias in ent.aliases:
+            for alias in [ent.name, *ent.aliases]:
                 if alias not in n["aliases"]:
                     n["aliases"].append(alias)
         else:
@@ -90,17 +114,15 @@ class GraphStore:
             )
         return key
 
-    def upsert_relation(self, rel: Relation, chunk_id: str) -> bool:
-        s = self.resolver.canonical_key(rel.source)
-        t = self.resolver.canonical_key(rel.target)
-        if s not in self.G or t not in self.G:
+    def _merge_relation(self, rel: Relation, chunk_id: str, s: str, t: str) -> bool:
+        if s == t:
             return False
         key = rel.relation.value
         if self.G.has_edge(s, t, key=key):
             e = self.G[s][t][key]
-            e["weight"] += 1
             if chunk_id not in e["source_chunks"]:
                 e["source_chunks"].append(chunk_id)
+                e["weight"] += 1
         else:
             self.G.add_edge(
                 s,
@@ -189,6 +211,8 @@ class GraphStore:
     # ---------- 检索 ----------
 
     def locate(self, name: str) -> str | None:
+        if name in self.G:
+            return name
         key = self.resolver.canonical_key(name)
         if key in self.G:
             return key
@@ -201,8 +225,8 @@ class GraphStore:
                 norm in normalize_str(a) for a in aliases
             ):
                 cands.append(n)
-        if cands:
-            return max(cands, key=lambda n: self.G.nodes[n].get("mention_count", 0))
+        if len(cands) == 1:
+            return cands[0]
         return None
 
     def expand(self, seeds: list[str], hops: int = 2, max_nodes: int = 40, max_edges: int = 80) -> tuple[nx.MultiDiGraph, list]:

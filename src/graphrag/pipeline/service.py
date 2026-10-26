@@ -60,6 +60,7 @@ class RagService:
         snapshot.meta["graph_version"] = self.store.meta.get("graph_version", 0)
         fingerprint = self.store.meta.get("extraction_fingerprint", "")
         snapshot.meta["extraction_fingerprint"] = fingerprint
+        extractions = {}
         # ponytail: 删除时 O(全部剩余分块) 本地重放；规模触顶后再做增量撤销。
         for record in self.chunks.iter_chunks():
             source = record["metadata"]["doc_id"]
@@ -72,14 +73,16 @@ class RagService:
                 if cid in self.store.meta.get("processed_chunks", {}):
                     raise ValueError("剩余文档缺少有效抽取缓存，无法安全删除，请先重新构建。")
                 continue
-            snapshot.add_extraction(ext, cid)
+            extractions[cid] = ext
             snapshot.meta["processed_chunks"][cid] = digest
+        snapshot.rebuild(extractions)
         snapshot.meta["built_at"] = time.strftime("%Y-%m-%d %H:%M:%S")
         # 删除记录与新图同一文件提交；清理中断后仍屏蔽旧分块，并在启动时重试。
         snapshot.meta["deleted_documents"] = sorted(deleted)
         snapshot.save()
         with self._lock:
             self.store.G, self.store.resolver, self.store.meta = snapshot.G, snapshot.resolver, snapshot.meta
+            self.store._extractions = snapshot._extractions
         self._finish_deletions()
         return True
 
@@ -147,8 +150,10 @@ class RagService:
 
         # ponytail: 小语料按批次复制整图保存检查点；大图时改用事务存储。
         working_store = deepcopy(self.store) if todo else None
+        extractions = dict(self.store._extractions)
         if working_store is not None:
             if reset:
+                extractions = {}
                 version = working_store.meta.get("graph_version", 0)
                 working_store.clear()
                 working_store.meta["processed_chunks"] = {}
@@ -178,7 +183,7 @@ class RagService:
                 for future in finished:
                     cid, h, ext = future.result()
                     if ext is not None:
-                        working_store.add_extraction(ext, cid)
+                        extractions[cid] = ext
                         working_store.meta.setdefault("processed_chunks", {})[cid] = h
                     else:
                         failed += 1
@@ -190,14 +195,18 @@ class RagService:
                     or time.monotonic() - last_published >= settings.build_publish_interval
                     or not pending
                 ):
+                    # ponytail: 每次发布 O(已完成分块) 重放以消除别名顺序影响；大图再做增量索引。
                     snapshot = deepcopy(working_store)
+                    snapshot.rebuild(extractions)
                     snapshot.meta["built_at"] = time.strftime("%Y-%m-%d %H:%M:%S")
                     snapshot.save()
                     with self._lock:
                         self.store.G = snapshot.G
                         self.store.resolver = snapshot.resolver
                         self.store.meta = snapshot.meta
+                        self.store._extractions = snapshot._extractions
                     working_store.meta["graph_version"] = snapshot.meta["graph_version"]
+                    working_store.G = snapshot.G
                     saved_success_count = done - failed
                     checkpoint_processed = done
                     last_published = time.monotonic()

@@ -265,11 +265,12 @@ class ReviewChecks(unittest.TestCase):
             self.assertTrue(service.delete_document(docs[0]["doc_id"]))
         model.assert_not_called()
         self.assertNotIn("仅a存在", service.store.G)
-        node = service.store.G.nodes["星辰科技"]
+        company, university = service.store.locate("星辰科技"), service.store.locate("清华大学")
+        node = service.store.G.nodes[company]
         self.assertEqual(node["description"], "B 描述")
         self.assertEqual(node["mention_count"], 1)
         self.assertEqual(node["source_chunks"], [f"{docs[1]['doc_id']}:0"])
-        self.assertEqual(service.store.G["星辰科技"]["清华大学"]["PARTNERS_WITH"]["weight"], 1)
+        self.assertEqual(service.store.G[company][university]["PARTNERS_WITH"]["weight"], 1)
         restored = RagService()
         restored.load()
         self.assertEqual(restored.store.G.number_of_nodes(), 2)
@@ -424,7 +425,42 @@ class ReviewChecks(unittest.TestCase):
             with patch("graphrag.pipeline.service.fresh_llm_config", return_value=config):
                 service.build_graph()
             self.assertEqual(extract.call_count, 3)
-        self.assertEqual(service.store.G.nodes["星辰科技"]["mention_count"], 1)
+        self.assertEqual(service.store.G.nodes[service.store.locate("星辰科技")]["mention_count"], 1)
+
+    def test_alias_ambiguity_and_types_stay_separate_in_any_order(self):
+        from itertools import permutations
+
+        entities = [entity("北大"), entity("北京大学", ["北大"]), entity("北方大学", ["北大"]),
+                    Entity(name="北京大学", type="LOCATION")]
+        graphs = []
+        for order in permutations(entities):
+            store = GraphStore()
+            store.rebuild({f"doc:{entities.index(e)}": ChunkExtraction(entities=[e]) for e in order})
+            self.assertEqual(store.G.number_of_nodes(), 4)
+            self.assertIsNone(store.locate("北京大学"))
+            self.assertIsNone(store.locate("北大"))
+            self.assertNotEqual(store.resolver.entity_key("北京大学", "ORG"),
+                                store.resolver.entity_key("北京大学", "LOCATION"))
+            graphs.append(sorted(store.G.nodes))
+        self.assertTrue(all(g == graphs[0] for g in graphs))
+
+    def test_alias_merge_preserves_relations_sources_and_repeated_builds(self):
+        service = RagService()
+        docs = service.ingest([("a.txt", b"A"), ("b.txt", b"B")])
+        first = ChunkExtraction(entities=[entity("北大"), entity("合作方")],
+            relations=[Relation(source="北大", target="合作方", relation="PARTNERS_WITH")])
+        second = ChunkExtraction(entities=[entity("北京大学", ["北大"])])
+        with patch.object(EntityExtractor, "extract", side_effect=lambda text: first if text == "A" else second):
+            service.build_graph([docs[0]["doc_id"]])
+            service.build_graph([docs[1]["doc_id"]])
+        self.assertEqual(service.store.G.number_of_nodes(), 2)
+        self.assertEqual(service.store.G.number_of_edges(), 1)
+        key = service.store.locate("北大")
+        self.assertEqual(service.store.G.nodes[key]["name"], "北京大学")
+        self.assertEqual(service.store.G.nodes[key]["mention_count"], 2)
+        restored = RagService()
+        restored.load()
+        self.assertEqual(restored.store.locate("北大"), key)
 
     def test_corrupt_cache_is_replaced_and_empty_success_is_cached(self):
         service = RagService()
