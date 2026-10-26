@@ -298,6 +298,7 @@ class ReviewChecks(unittest.TestCase):
         self.assertEqual(len(result["sentences"]), 2)
         self.assertEqual(result["used_docs"], ["1", "2"])
         self.assertIn("[1][2]", result["answer"])
+        self.assertEqual(result["verification"], "verified")
         fake = SimpleNamespace(invoke=Mock(return_value=AIMessage(content='{"sentences":[]}')))
         self.assertEqual(answer_with_evidence(fake, "问题", "", sources)["verification"], "insufficient")
         fake.invoke.assert_called_once()

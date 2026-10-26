@@ -65,11 +65,13 @@ def answer_with_evidence(llm, question: str, context: str, sources: list[dict]) 
         {"question": question, "context": context, "sources": supplied}, CitedAnswer)
     lookup = {s["id"]: s for s in supplied}
     candidates = []
+    rejected = False
     for sentence in draft.sentences:
         if not sentence.text.strip() or not all(
             c.source_id in lookup and c.quote.strip() and c.quote in lookup[c.source_id]["content"]
             for c in sentence.citations
         ):
+            rejected = True
             continue
         for text in re.split(r"(?<=[。！？!?])\s*|(?<=\.)\s+|\n+", sentence.text):
             if text.strip():
@@ -93,5 +95,5 @@ def answer_with_evidence(llm, question: str, context: str, sources: list[dict]) 
     return {"answer": answer or "现有证据不足以支持可靠答案。", "sentences": sentences, "sources": cited,
             "retrieved_sources": [s for s in sources if s["id"] not in used],
             "used_docs": sorted({s["doc_id"] for s in cited}),
-            "verification": "verified" if sentences and len(sentences) == len(candidates) == len(draft.sentences)
+            "verification": "verified" if sentences and not rejected and len(sentences) == len(candidates)
                             else "partial" if sentences else "insufficient"}
