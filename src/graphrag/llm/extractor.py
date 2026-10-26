@@ -99,18 +99,19 @@ def _parse_raw_json(raw: object) -> Optional[dict]:
 
 
 class EntityExtractor:
-    def __init__(self, llm=None):
+    def __init__(self, llm=None, config: dict | None = None):
         self.llm = llm
+        self.config = config
         self._chain: Optional[Runnable] = None
 
     def _get_chain(self) -> Runnable:
         if self.llm is None:
-            self.llm = build_llm(for_extraction=True)
+            self.llm = build_llm(for_extraction=True, **({"config": self.config} if self.config is not None else {}))
         if self._chain is None:
             prompt = ChatPromptTemplate.from_messages(
                 [SystemMessage(content=EXTRACTION_SYSTEM_PROMPT), ("human", "文本：\n{text}")]
             )
-            method = fresh_llm_config()["structured_output_method"]
+            method = (self.config if self.config is not None else fresh_llm_config())["structured_output_method"]
             self._chain = prompt | self.llm.with_structured_output(
                 ChunkExtraction,
                 method=method,

@@ -1,4 +1,5 @@
 import hashlib
+import json
 import logging
 import threading
 import time
@@ -8,10 +9,11 @@ from pathlib import Path
 
 from langchain_core.prompts import ChatPromptTemplate
 
-from graphrag.config import settings
+from graphrag.config import fresh_llm_config, settings
 from graphrag.graph.store import GraphStore
 from graphrag.llm.client import build_llm
-from graphrag.llm.extractor import EntityExtractor
+from graphrag.llm.extractor import EXTRACTION_SYSTEM_PROMPT, EntityExtractor
+from graphrag.schemas.extraction import ChunkExtraction
 from graphrag.loaders.document_loader import SUPPORTED_EXTS, load_document
 from graphrag.pipeline.chunk_store import ChunkStore, chunk_id_of, content_hash
 from graphrag.retrieval.context_formatter import format_subgraph_context
@@ -62,13 +64,30 @@ class RagService:
         progress=None,
     ) -> dict:
         records = self.chunks.iter_chunks(doc_ids)
+        config = fresh_llm_config()
+        fingerprint = content_hash(json.dumps({
+            "config": {k: v for k, v in config.items() if k not in {"openai_api_key", "temperature_answer"}},
+            "prompt": EXTRACTION_SYSTEM_PROMPT, "schema": ChunkExtraction.model_json_schema(),
+        }, sort_keys=True, ensure_ascii=False))
         processed = self.store.meta.get("processed_chunks", {})
+        reset = bool(processed) and (
+            self.store.meta.get("extraction_fingerprint") != fingerprint
+            or any(processed.get(chunk_id_of(r["metadata"]["doc_id"], r["chunk_index"]))
+                   not in (None, content_hash(r["content"])) for r in records)
+            or any(processed.get(chunk_id_of(r["metadata"]["doc_id"], r["chunk_index"])) is not None
+                   and self.chunks.load_extraction(chunk_id_of(r["metadata"]["doc_id"], r["chunk_index"]),
+                                                   content_hash(r["content"]), fingerprint) is None
+                   for r in records)
+        )
+        if reset:
+            records = self.chunks.iter_chunks()
+            processed = {}
         todo = []
         for record in records:
             doc_id = record.get("metadata", {}).get("doc_id", "")
             cid = chunk_id_of(doc_id, record["chunk_index"])
             h = content_hash(record["content"])
-            if processed.get(cid) == h:
+            if processed.get(cid) == h and self.chunks.load_extraction(cid, h, fingerprint) is not None:
                 continue
             todo.append((cid, record["content"], h))
 
@@ -79,12 +98,23 @@ class RagService:
 
         # ponytail: 小语料按批次复制整图保存检查点；大图时改用事务存储。
         working_store = deepcopy(self.store) if todo else None
+        if working_store is not None:
+            if reset:
+                version = working_store.meta.get("graph_version", 0)
+                working_store.clear()
+                working_store.meta["processed_chunks"] = {}
+                working_store.meta["graph_version"] = version
+            working_store.meta["extraction_fingerprint"] = fingerprint
         saved_success_count = 0
         checkpoint_processed = 0
 
         def extract_task(item):
             cid, text, h = item
-            ext = EntityExtractor().extract(text)
+            ext = self.chunks.load_extraction(cid, h, fingerprint)
+            if ext is None:
+                ext = EntityExtractor(config=config).extract(text)
+                if ext is not None:
+                    self.chunks.save_extraction(cid, h, fingerprint, ext)
             return cid, h, ext
 
         with ThreadPoolExecutor(max_workers=settings.extraction_concurrency) as pool:

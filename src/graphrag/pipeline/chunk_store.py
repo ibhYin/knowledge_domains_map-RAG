@@ -1,11 +1,17 @@
 import hashlib
 import json
+import logging
+import re
 import time
 from pathlib import Path
 
 from langchain_core.documents import Document
 
 from graphrag.config import settings
+from graphrag.graph.persistence import _write_json
+from graphrag.schemas.extraction import ChunkExtraction
+
+logger = logging.getLogger(__name__)
 
 
 def chunk_id_of(doc_id: str, chunk_index: int) -> str:
@@ -17,6 +23,29 @@ def content_hash(text: str) -> str:
 
 
 class ChunkStore:
+    def _extraction_file(self, chunk_id: str) -> Path:
+        if not re.fullmatch(r"[A-Za-z0-9_-]+:[0-9]+", chunk_id):
+            raise ValueError("无效的分块 ID")
+        doc_id, index = chunk_id.split(":")
+        return settings.data_dir / "extractions" / doc_id / f"{index}.json"
+
+    def load_extraction(self, chunk_id: str, digest: str, fingerprint: str) -> ChunkExtraction | None:
+        path = self._extraction_file(chunk_id)
+        if not path.exists():
+            return None
+        try:
+            data = json.loads(path.read_text(encoding="utf-8"))
+            if (data["chunk_id"], data["content_hash"], data["fingerprint"]) != (chunk_id, digest, fingerprint):
+                return None
+            return ChunkExtraction.model_validate(data["extraction"])
+        except (ValueError, KeyError, TypeError):
+            logger.warning("抽取缓存无效，将重新抽取: %s", chunk_id)
+            return None
+
+    def save_extraction(self, chunk_id: str, digest: str, fingerprint: str, extraction: ChunkExtraction) -> None:
+        _write_json({"chunk_id": chunk_id, "content_hash": digest, "fingerprint": fingerprint,
+                     "extraction": extraction.model_dump(mode="json")}, self._extraction_file(chunk_id))
+
     def _chunk_file(self, doc_id: str) -> Path:
         return settings.chunks_dir / f"{doc_id}.jsonl"
 

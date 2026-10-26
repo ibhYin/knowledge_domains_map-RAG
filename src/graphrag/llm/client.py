@@ -5,8 +5,8 @@ from langchain_openai import ChatOpenAI
 from graphrag.config import fresh_llm_config
 
 
-def build_llm(model: Optional[str] = None, temperature: Optional[float] = None, *, for_extraction: bool = False) -> ChatOpenAI:
-    cfg = fresh_llm_config()
+def build_llm(model: Optional[str] = None, temperature: Optional[float] = None, *, for_extraction: bool = False, config: dict | None = None) -> ChatOpenAI:
+    cfg = config if config is not None else fresh_llm_config()
     return ChatOpenAI(
         model=model or cfg["openai_model"],
         api_key=cfg["openai_api_key"],

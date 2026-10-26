@@ -336,7 +336,50 @@ class ReviewChecks(unittest.TestCase):
         with patch.object(EntityExtractor, "extract", return_value=extraction()) as extract:
             result = service.build_graph()
         self.assertEqual(result["status"], "done")
-        extract.assert_called_once()
+        extract.assert_not_called()  # 已保存抽取缓存，图谱保存失败无需再次调用模型。
+
+    def test_cached_extractions_rebuild_graph_without_model(self):
+        service = RagService()
+        service.ingest([("sample.txt", "星辰科技与清华大学合作。".encode())])
+        with patch.object(EntityExtractor, "extract", return_value=extraction()):
+            service.build_graph()
+        restored = RagService()
+        with patch.object(EntityExtractor, "extract") as extract:
+            result = restored.build_graph()
+        extract.assert_not_called()
+        self.assertEqual(result["nodes"], 2)
+        self.assertEqual(result["edges"], 1)
+
+    def test_cache_invalidates_on_config_or_content_changes(self):
+        from graphrag.config import fresh_llm_config
+
+        service = RagService()
+        record = {"content": "原文", "chunk_index": 0, "metadata": {"doc_id": "doc"}}
+        with patch.object(service.chunks, "iter_chunks", return_value=[record]), \
+             patch.object(EntityExtractor, "extract", return_value=extraction()) as extract:
+            service.build_graph()
+            service.build_graph()
+            self.assertEqual(extract.call_count, 1)
+            record["content"] = "修改后的原文"
+            service.build_graph()
+            self.assertEqual(extract.call_count, 2)
+            config = {**fresh_llm_config(), "openai_model": "different-model"}
+            with patch("graphrag.pipeline.service.fresh_llm_config", return_value=config):
+                service.build_graph()
+            self.assertEqual(extract.call_count, 3)
+        self.assertEqual(service.store.G.nodes["星辰科技"]["mention_count"], 1)
+
+    def test_corrupt_cache_is_replaced_and_empty_success_is_cached(self):
+        service = RagService()
+        record = {"content": "普通文字", "chunk_index": 0, "metadata": {"doc_id": "doc"}}
+        with patch.object(service.chunks, "iter_chunks", return_value=[record]), \
+             patch.object(EntityExtractor, "extract", return_value=ChunkExtraction()) as extract:
+            service.build_graph()
+            service.chunks._extraction_file("doc:0").write_text("{", encoding="utf-8")
+            service.build_graph()
+            service.build_graph()
+        self.assertEqual(extract.call_count, 2)
+        self.assertEqual(service.store.G.number_of_nodes(), 0)
 
     def test_unexpected_build_error_does_not_publish_partial_results(self):
         service = RagService()
