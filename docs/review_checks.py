@@ -216,6 +216,10 @@ class ReviewChecks(unittest.TestCase):
         restored = nx.parse_graphml(store.export_graphml())
         self.assertEqual(restored.number_of_nodes(), 2)
         self.assertEqual(restored.number_of_edges(), 1)
+        key = store.locate("星辰科技")
+        self.assertEqual(json.loads(restored.nodes[key]["source_chunks"]), ["doc:0"])
+        self.assertEqual(store.G.nodes[key]["source_chunks"], ["doc:0"])
+        self.assertEqual(json.loads(next(iter(restored.edges(data=True)))[2]["source_chunks"]), ["doc:0"])
 
     def test_alias_resolution_is_independent_of_insertion_order(self):
         counts = []

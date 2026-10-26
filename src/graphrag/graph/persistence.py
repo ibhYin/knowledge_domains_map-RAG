@@ -1,6 +1,7 @@
 import json
 import os
 import tempfile
+from itertools import chain
 from pathlib import Path
 
 import networkx as nx
@@ -48,10 +49,10 @@ def load_meta(path: Path) -> dict:
 
 
 def export_graphml(graph: nx.MultiDiGraph) -> str:
-    # MultiDiGraph → DiGraph（GraphML 对平行边支持弱，按 key 合并为多条路径）
     simple = nx.MultiDiGraph(graph)
-    import io
-
-    buf = io.StringIO()
-    nx.write_graphml(simple, buf)
-    return buf.getvalue()
+    for attributes in chain((simple.graph,), (d for _, d in simple.nodes(data=True)),
+                            (d for *_, d in simple.edges(data=True))):
+        for key, value in list(attributes.items()):
+            if isinstance(value, (list, dict)):
+                attributes[key] = json.dumps(value, ensure_ascii=False)
+    return "\n".join(nx.generate_graphml(simple))
