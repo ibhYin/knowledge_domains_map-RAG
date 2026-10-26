@@ -136,7 +136,7 @@ https://ark.cn-beijing.volces.com/api/coding/v3
 
 后端源码变更由控制服务自动重载；`supervisor/` 自身的改动需要 `./start.sh restart --supervisor`。手工重启使用 `./start.sh restart`（构建中会询问，`--force` 跳过）。自动重载是否生效、当前后端 PID 与代码更新时间显示在「模型设置」页的「运行状态」卡片，也可通过 `GET /api/health` 与 `GET /api/control/status` 查看。
 
-整批建图前，可先运行 `python docs/smoke_extract.py`：使用内置短文本，通过两次真实模型调用检查文档抽取、问题实体抽取和图谱保存／重载。检查使用临时目录，不修改原有文档或图谱；需要先安装项目依赖并配置模型。
+整批建图前，可先运行 `python docs/smoke_extract.py`：使用内置短文本，正常通过四次真实模型调用检查文档抽取、问题实体抽取、逐句引用和证据审核，同时验证缓存重建、删除、重启及 GraphML 导出。检查使用临时目录，不修改原有文档或图谱；需要先安装项目依赖并配置模型。
 
 ## 说明与限制
 
