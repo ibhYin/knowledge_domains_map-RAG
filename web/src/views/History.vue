@@ -10,14 +10,15 @@
 
       <div v-if="items.length" class="history-list">
         <div v-for="(h, i) in items" :key="i" class="history-item">
-          <div class="h-head" @click="h.open = !h.open">
-            <div class="h-q">{{ h.question }}</div>
-            <div class="muted">{{ h.ts }} · {{ h.node_count }} 节点 / {{ h.edge_count }} 边</div>
+          <button class="h-head" :aria-expanded="h.open" :aria-controls="`history-body-${i}`" @click="h.open = !h.open">
+            <span class="h-q">{{ h.question }}</span>
+            <span class="muted">{{ h.ts }} · {{ h.node_count }} 节点 / {{ h.edge_count }} 边</span>
             <svg :class="{ open: h.open }" class="chevron" viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="m6 9 6 6 6-6" /></svg>
-          </div>
-          <div v-if="h.open" class="h-body">
+          </button>
+          <div v-if="h.open" :id="`history-body-${i}`" class="h-body">
             <div v-if="h.matched?.length" class="meta">匹配实体：<span v-for="m in h.matched" :key="m" class="chip green">{{ m }}</span></div>
-            <div class="h-answer">{{ h.answer }}</div>
+            <CitedAnswer :answer="h.answer" :sentences="h.sentences || []" :sources="h.sources || []"
+              :retrieved-sources="h.retrieved_sources || []" :verification="h.verification || ''" />
             <GraphViz v-if="h.subgraph?.nodes?.length" :nodes="h.subgraph.nodes" :links="h.subgraph.links" height="300px" />
           </div>
         </div>
@@ -31,6 +32,7 @@
 import { onMounted, ref } from 'vue'
 import { api } from '../api'
 import GraphViz from '../components/GraphViz.vue'
+import CitedAnswer from '../components/CitedAnswer.vue'
 
 const items = ref([])
 
@@ -55,7 +57,7 @@ onMounted(refresh)
 <style scoped>
 .history-list { display: flex; flex-direction: column; gap: 10px; }
 .history-item { border: 1px solid var(--border); border-radius: 10px; overflow: hidden; }
-.h-head { display: flex; align-items: center; gap: 12px; padding: 12px 16px; cursor: pointer; }
+.h-head { display: flex; align-items: center; gap: 12px; padding: 12px 16px; cursor: pointer; width: 100%; border: 0; background: var(--surface); color: inherit; text-align: left; font: inherit; }
 .h-head:hover { background: #f8fafc; }
 .h-q { flex: 1; font-weight: 500; }
 .chevron { color: var(--text-3); transition: transform 0.2s; }

@@ -47,6 +47,7 @@ from graphrag.llm.extractor import (
     QueryEntityExtractor,
 )
 from graphrag.pipeline.service import RagService
+from graphrag.retrieval.evidence import answer_with_evidence
 from graphrag.schemas.extraction import ChunkExtraction, Entity, QueryEntities, QueryEntity, Relation
 
 
@@ -244,11 +245,75 @@ class ReviewChecks(unittest.TestCase):
 
     def test_sources_include_node_only_evidence(self):
         service = RagService()
-        service.store.upsert_entity(entity("清华大学"), "doc:0")
-        fake_llm = SimpleNamespace(invoke=lambda _: AIMessage(content="示例答案"))
+        doc = service.ingest([("sample.txt", "清华大学是一所大学。".encode())])[0]
+        with patch.object(EntityExtractor, "extract", return_value=ChunkExtraction(entities=[entity("清华大学")])):
+            service.build_graph()
+        fake_llm = SimpleNamespace(invoke=Mock(side_effect=[AIMessage(content=json.dumps({"sentences": [
+            {"text": "清华大学是一所大学。", "citations": [{"source_id": 1, "quote": "清华大学是一所大学。"}]}]})),
+            AIMessage(content='{"supported":[0]}')]))
         with patch("graphrag.pipeline.service.build_llm", return_value=fake_llm):
             answer = service.answer("清华大学是什么？", seed_override=["清华大学"])
-        self.assertEqual(answer["used_docs"], ["doc"])
+        self.assertEqual(answer["used_docs"], [doc["doc_id"]])
+        self.assertEqual(answer["sources"][0]["filename"], "sample.txt")
+        self.assertEqual(answer["verification"], "verified")
+
+    def test_evidence_rejects_fabricated_quotes_ids_and_unsupported_claims(self):
+        sources = [{"id": 1, "doc_id": "doc", "content": "甲公司没有与乙公司合作。"},
+                   {"id": 2, "doc_id": "other", "content": "其他原文"}]
+        draft = {"sentences": [
+            {"text": "虚构引用。", "citations": [{"source_id": 99, "quote": "其他原文"}]},
+            {"text": "虚构片段。", "citations": [{"source_id": 1, "quote": "不存在的原文"}]},
+            {"text": "甲公司与乙公司合作。", "citations": [{"source_id": 1, "quote": "与乙公司合作"}]},
+            {"text": "甲公司没有与乙公司合作。", "citations": [{"source_id": 1, "quote": "甲公司没有与乙公司合作。"}]},
+        ]}
+        fake = SimpleNamespace(invoke=Mock(side_effect=[AIMessage(content=json.dumps(draft)),
+                                                       AIMessage(content='{"supported":[1]}')]))
+        result = answer_with_evidence(fake, "是否合作？", "", sources)
+        self.assertEqual(len(result["sentences"]), 1)
+        self.assertEqual(result["sentences"][0]["text"], "甲公司没有与乙公司合作。")
+        self.assertEqual(result["used_docs"], ["doc"])
+        self.assertEqual([s["id"] for s in result["retrieved_sources"]], [2])
+        self.assertEqual(result["verification"], "partial")
+        verification_input = json.loads(fake.invoke.call_args_list[1].args[0][1].content)
+        self.assertEqual(verification_input["sources"][0]["content"], sources[0]["content"])
+
+    def test_evidence_handles_multiple_citations_empty_and_verifier_failure(self):
+        sources = [{"id": i, "doc_id": str(i), "content": quote}
+                   for i, quote in [(1, "甲在北京。"), (2, "乙在上海。")]]
+        draft = {"sentences": [{"text": "甲在北京。乙在上海。", "citations": [
+            {"source_id": s["id"], "quote": s["content"]} for s in sources]}]}
+        fake = SimpleNamespace(invoke=Mock(side_effect=[AIMessage(content=json.dumps(draft)),
+                                                       AIMessage(content='{"supported":[0,1]}')]))
+        result = answer_with_evidence(fake, "分别在哪？", "", sources)
+        self.assertEqual(len(result["sentences"]), 2)
+        self.assertEqual(result["used_docs"], ["1", "2"])
+        self.assertIn("[1][2]", result["answer"])
+        fake = SimpleNamespace(invoke=Mock(return_value=AIMessage(content='{"sentences":[]}')))
+        self.assertEqual(answer_with_evidence(fake, "问题", "", sources)["verification"], "insufficient")
+        fake.invoke.assert_called_once()
+        fake = SimpleNamespace(invoke=Mock(side_effect=[AIMessage(content=json.dumps(draft)), AIMessage(content="bad json")]))
+        with self.assertRaises(QueryExtractionError):
+            answer_with_evidence(fake, "问题", "", sources)
+
+    def test_history_keeps_evidence_snapshot_after_document_deletion(self):
+        service = RagService()
+        doc = service.ingest([("sample.txt", "清华大学是一所大学。".encode())])[0]
+        with patch.object(EntityExtractor, "extract", return_value=ChunkExtraction(entities=[entity("清华大学")])):
+            service.build_graph()
+        fake = SimpleNamespace(invoke=Mock(side_effect=[AIMessage(content=json.dumps({"sentences": [
+            {"text": "清华大学是一所大学。", "citations": [{"source_id": 1, "quote": "清华大学是一所大学。"}]}]})),
+            AIMessage(content='{"supported":[0]}')]))
+        with patch.object(routes, "service", service), \
+             patch.object(routes, "_HISTORY_FILE", settings.data_dir / "history.json"), \
+             patch("graphrag.pipeline.service.build_llm", return_value=fake):
+            client = TestClient(app)
+            response = client.post("/api/query", json={"question": "大学？", "seed_override": ["清华大学"]})
+            self.assertEqual(response.status_code, 200)
+            self.assertEqual(client.delete(f"/api/documents/{doc['doc_id']}").status_code, 200)
+            saved = client.get("/api/history").json()["history"][0]
+        self.assertTrue(saved["sources"][0]["deleted"])
+        self.assertEqual(saved["sources"][0]["content"], "清华大学是一所大学。")
+        self.assertEqual(saved["sentences"], response.json()["sentences"])
 
     def test_delete_replays_remaining_sources_without_model(self):
         service = RagService()

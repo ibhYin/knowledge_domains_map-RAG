@@ -6,7 +6,7 @@ from pathlib import Path
 import networkx as nx
 
 
-def _write_json(data: dict, path: Path) -> None:
+def _write_json(data: dict | list, path: Path) -> None:
     path.parent.mkdir(parents=True, exist_ok=True)
     temporary = None
     try:

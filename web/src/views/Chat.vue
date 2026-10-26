@@ -15,9 +15,10 @@
           <div class="bubble" :class="m.role">
             <template v-if="m.role === 'user'">{{ m.question }}</template>
             <template v-else>
-              <div v-if="m.thinking" class="thinking">思考中…</div>
+              <div v-if="m.thinking" class="thinking" role="status">检索与证据核对中…</div>
               <template v-else>
-                <div class="answer">{{ m.answer }}</div>
+                <CitedAnswer :answer="m.answer" :sentences="m.sentences" :sources="m.sources"
+                  :retrieved-sources="m.retrievedSources" :verification="m.verification" />
                 <div v-if="m.matched?.length" class="meta">
                   匹配实体：
                   <span v-for="e in m.matched" :key="e" class="chip green">{{ e }}</span>
@@ -39,6 +40,7 @@
       <div class="input-row">
         <input
           v-model="question"
+          aria-label="问题"
           placeholder="输入问题，回车提问"
           @keyup.enter="ask"
           :disabled="asking"
@@ -59,6 +61,7 @@
 import { nextTick, ref } from 'vue'
 import { api } from '../api'
 import GraphViz from '../components/GraphViz.vue'
+import CitedAnswer from '../components/CitedAnswer.vue'
 
 const question = ref('')
 const asking = ref(false)
@@ -89,6 +92,10 @@ async function ask() {
     messages.value[idx] = {
       role: 'assistant',
       answer: r.answer,
+      sentences: r.sentences,
+      sources: r.sources,
+      retrievedSources: r.retrieved_sources,
+      verification: r.verification,
       matched: r.matched_entities.map((m) => m.name),
       context: r.context,
       subgraph: r.subgraph,

@@ -4,10 +4,8 @@ import logging
 import threading
 import time
 from concurrent.futures import FIRST_COMPLETED, ThreadPoolExecutor, wait
-from copy import deepcopy
+from copy import copy, deepcopy
 from pathlib import Path
-
-from langchain_core.prompts import ChatPromptTemplate
 
 from graphrag.config import fresh_llm_config, settings
 from graphrag.graph.store import GraphStore
@@ -17,17 +15,11 @@ from graphrag.schemas.extraction import ChunkExtraction
 from graphrag.loaders.document_loader import SUPPORTED_EXTS, load_document
 from graphrag.pipeline.chunk_store import ChunkStore, chunk_id_of, content_hash
 from graphrag.retrieval.context_formatter import format_subgraph_context
+from graphrag.retrieval.evidence import answer_with_evidence, collect_sources
 from graphrag.retrieval.graph_search import GraphSearch
 from graphrag.splitting.text_splitter import split_documents
 
 logger = logging.getLogger(__name__)
-
-ANSWER_SYSTEM_PROMPT = (
-    "你是基于知识图谱的中文问答助手。请依据【图谱上下文】中的实体与关系回答用户问题，"
-    "用中文、结构清晰。只依据给定上下文，不要使用图谱之外的知识；"
-    "若上下文不足以回答，直接说明缺少哪些信息，不要编造。"
-)
-
 
 class RagService:
     def __init__(self):
@@ -262,38 +254,34 @@ class RagService:
         max_edges: int = 80,
         seed_override: list[str] | None = None,
     ) -> dict:
+        with self._lock:
+            store = copy(self.store)
         result = self.search.search(
-            question, hops=hops, max_nodes=max_nodes, max_edges=max_edges, seed_override=seed_override
+            question, hops=hops, max_nodes=max_nodes, max_edges=max_edges, seed_override=seed_override, store=store
         )
         subgraph = result["subgraph"]
         edges = result["edges"]
 
         if subgraph.number_of_nodes() == 0:
             context = ""
-            answer_text = "图谱中没有检索到与问题相关的实体，无法回答。请尝试换个问法，或先上传文档并构建图谱。"
+            grounded = {"answer": "图谱中没有检索到与问题相关的实体，无法回答。请尝试换个问法，或先上传文档并构建图谱。",
+                        "sentences": [], "sources": [], "retrieved_sources": [], "used_docs": [], "verification": "insufficient"}
         else:
-            context = format_subgraph_context(self.store, subgraph, edges, question)
-            prompt = ChatPromptTemplate.from_messages(
-                [("system", ANSWER_SYSTEM_PROMPT), ("human", "{context}")]
-            )
+            context = format_subgraph_context(store, subgraph, edges, question)
+            with self._lock:
+                documents = self.list_documents()
+                records = self.chunks.iter_chunks([d["doc_id"] for d in documents])
+            sources = collect_sources(documents, records, subgraph, edges)
             llm = build_llm(temperature=settings.temperature_answer)
-            answer_text = llm.invoke(prompt.format_messages(context=context)).content
-
-        used_docs = sorted(
-            {
-                d.split(":", 1)[0]
-                for _, _, _, edata in edges
-                for d in edata.get("source_chunks", [])
-            }
-        )
+            grounded = answer_with_evidence(llm, question, context, sources)
         return {
-            "answer": answer_text,
+            **grounded,
             "matched_entities": result["matched_entities"],
             "context": context,
-            "subgraph": self.store.subgraph_viz(subgraph, edges),
+            "subgraph": store.subgraph_viz(subgraph, edges),
             "node_count": subgraph.number_of_nodes(),
             "edge_count": len(edges),
-            "used_docs": used_docs,
+            "graph_version": store.meta.get("graph_version", 0),
         }
 
 

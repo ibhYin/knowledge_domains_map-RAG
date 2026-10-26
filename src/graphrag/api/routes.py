@@ -11,6 +11,7 @@ from fastapi import APIRouter, HTTPException, Query, UploadFile
 from fastapi.responses import PlainTextResponse
 
 from graphrag.config import fresh_llm_config, settings, write_env
+from graphrag.graph.persistence import _write_json
 from graphrag.llm.extractor import QueryExtractionError
 from graphrag.pipeline.service import service
 from graphrag.schemas.api import BuildRequest, QueryRequest
@@ -39,6 +40,7 @@ _CODE_MTIME = _latest_code_mtime()
 
 _HISTORY_FILE = settings.data_dir / "history.json"
 _HISTORY_LIMIT = 100
+_history_lock = threading.Lock()
 
 
 def _load_history() -> list[dict]:
@@ -52,9 +54,7 @@ def _load_history() -> list[dict]:
 
 def _save_history(history: list[dict]) -> None:
     _HISTORY_FILE.parent.mkdir(parents=True, exist_ok=True)
-    _HISTORY_FILE.write_text(
-        json.dumps(history[-_HISTORY_LIMIT:], ensure_ascii=False, indent=2), encoding="utf-8"
-    )
+    _write_json(history[-_HISTORY_LIMIT:], _HISTORY_FILE)
 
 
 def _start_build_job(doc_ids: Optional[list[str]]) -> str:
@@ -257,13 +257,19 @@ def save_settings(body: dict):
 
 @router.get("/history")
 def history():
-    return {"history": list(reversed(_load_history()))}
+    with _history_lock:
+        items = _load_history()
+    active = {d["doc_id"] for d in service.list_documents()}
+    for item in items:
+        for source in [*(item.get("sources") or []), *(item.get("retrieved_sources") or [])]:
+            source["deleted"] = source["doc_id"] not in active
+    return {"history": list(reversed(items))}
 
 
 @router.delete("/history")
 def clear_history():
-    if _HISTORY_FILE.exists():
-        _HISTORY_FILE.write_text("[]", encoding="utf-8")
+    with _history_lock:
+        _save_history([])
     return {"cleared": True}
 
 
@@ -319,9 +325,9 @@ def query(body: QueryRequest):
         )
     except QueryExtractionError as exc:
         raise HTTPException(status_code=502, detail=str(exc)) from exc
-    history_list = _load_history()
-    history_list.append(
-        {
+    with _history_lock:
+        history_list = _load_history()
+        history_list.append({
             "question": body.question,
             "answer": result["answer"],
             "matched": [m["name"] for m in result["matched_entities"]],
@@ -329,8 +335,8 @@ def query(body: QueryRequest):
             "edge_count": result["edge_count"],
             "context": result["context"],
             "subgraph": result["subgraph"],
+            **{k: result.get(k) for k in ("sentences", "sources", "retrieved_sources", "verification", "used_docs", "graph_version")},
             "ts": time.strftime("%Y-%m-%d %H:%M:%S"),
-        }
-    )
-    _save_history(history_list)
+        })
+        _save_history(history_list)
     return result

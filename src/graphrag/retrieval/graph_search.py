@@ -16,8 +16,10 @@ class GraphSearch:
         max_nodes: int = 40,
         max_edges: int = 80,
         seed_override: list[str] | None = None,
+        store: GraphStore | None = None,
     ) -> dict:
         """从问题抽取种子实体 → 定位 → BFS 扩张，返回子图与命中信息。"""
+        store = store if store is not None else self.store
         if seed_override:
             seed_names = seed_override
         else:
@@ -28,13 +30,13 @@ class GraphSearch:
         matched = []
         seeds = []
         for name in seed_names:
-            key = self.store.locate(name)
+            key = store.locate(name)
             if key is not None:
                 matched.append(
                     {
                         "query": name,
                         "node": key,
-                        "name": self.store.G.nodes[key].get("name", key),
+                        "name": store.G.nodes[key].get("name", key),
                     }
                 )
                 seeds.append(key)
@@ -42,7 +44,7 @@ class GraphSearch:
         subgraph: nx.MultiDiGraph
         edges: list
         if seeds:
-            subgraph, edges = self.store.expand(seeds, hops=hops, max_nodes=max_nodes, max_edges=max_edges)
+            subgraph, edges = store.expand(seeds, hops=hops, max_nodes=max_nodes, max_edges=max_edges)
         else:
             subgraph, edges = nx.MultiDiGraph(), []
 
