@@ -37,7 +37,7 @@
             <td>{{ d.filename }}</td>
             <td><span class="chip">{{ d.chunk_count }}</span></td>
             <td class="muted">{{ d.uploaded_at }}</td>
-            <td><button class="btn btn-ghost btn-sm" style="color:var(--danger)" @click="removeDoc(d.doc_id)">删除</button></td>
+            <td><button class="btn btn-ghost btn-sm" style="color:var(--danger)" :disabled="deleting" @click="removeDoc(d.doc_id)">{{ deleting === d.doc_id ? '删除中…' : '删除' }}</button></td>
           </tr>
         </tbody>
       </table>
@@ -56,6 +56,7 @@ const dragging = ref(false)
 const uploadMsg = ref('')
 const uploadError = ref(false)
 const fileInput = ref(null)
+const deleting = ref(null)
 
 async function refresh() {
   try {
@@ -94,12 +95,17 @@ function onDrop(e) {
 }
 
 async function removeDoc(docId) {
-  if (!confirm('确定删除该文档及其分块？')) return
+  if (deleting.value || !confirm('确定删除该文档？图谱将移除它贡献的知识，保留其他文档的结果，无需重新调用模型。')) return
+  deleting.value = docId
   try {
     await api.deleteDocument(docId)
+    uploadError.value = false
+    uploadMsg.value = '文档已删除，图谱已按剩余文档更新。'
     await refresh()
   } catch (e) {
     alert('删除失败：' + e.message)
+  } finally {
+    deleting.value = null
   }
 }
 

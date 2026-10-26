@@ -2,6 +2,7 @@ import hashlib
 import json
 import logging
 import re
+import shutil
 import time
 from pathlib import Path
 
@@ -87,10 +88,7 @@ class ChunkStore:
         return json.loads(settings.index_file.read_text(encoding="utf-8"))
 
     def _save_registry(self, registry: dict) -> None:
-        settings.index_file.parent.mkdir(parents=True, exist_ok=True)
-        settings.index_file.write_text(
-            json.dumps(registry, ensure_ascii=False, indent=2), encoding="utf-8"
-        )
+        _write_json(registry, settings.index_file)
 
     def register(self, doc_id: str, filename: str, size: int, chunk_count: int) -> None:
         registry = self._load_registry()
@@ -112,12 +110,15 @@ class ChunkStore:
 
     def delete_document(self, doc_id: str) -> bool:
         registry = self._load_registry()
-        if doc_id not in registry:
-            return False
-        registry.pop(doc_id)
-        self._save_registry(registry)
+        existed = doc_id in registry
+        if existed:
+            registry.pop(doc_id)
+            self._save_registry(registry)
         doc_files = list(settings.documents_dir.glob(f"{doc_id}.*"))
         for p in [*doc_files, self._chunk_file(doc_id)]:
             if p.exists():
                 p.unlink()
-        return True
+        extraction_dir = self._extraction_file(f"{doc_id}:0").parent
+        if extraction_dir.exists():
+            shutil.rmtree(extraction_dir)
+        return existed

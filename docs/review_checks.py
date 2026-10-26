@@ -250,6 +250,63 @@ class ReviewChecks(unittest.TestCase):
             answer = service.answer("清华大学是什么？", seed_override=["清华大学"])
         self.assertEqual(answer["used_docs"], ["doc"])
 
+    def test_delete_replays_remaining_sources_without_model(self):
+        service = RagService()
+        docs = service.ingest([("a.txt", b"A"), ("b.txt", b"B")])
+        def extract(text):
+            ext = extraction()
+            ext.entities[0].description = "A 独有的较长描述" if text == "A" else "B 描述"
+            if text == "A":
+                ext.entities.append(entity("仅 A 存在"))
+            return ext
+        with patch.object(EntityExtractor, "extract", side_effect=extract):
+            service.build_graph()
+        with patch.object(EntityExtractor, "extract") as model:
+            self.assertTrue(service.delete_document(docs[0]["doc_id"]))
+        model.assert_not_called()
+        self.assertNotIn("仅a存在", service.store.G)
+        node = service.store.G.nodes["星辰科技"]
+        self.assertEqual(node["description"], "B 描述")
+        self.assertEqual(node["mention_count"], 1)
+        self.assertEqual(node["source_chunks"], [f"{docs[1]['doc_id']}:0"])
+        self.assertEqual(service.store.G["星辰科技"]["清华大学"]["PARTNERS_WITH"]["weight"], 1)
+        restored = RagService()
+        restored.load()
+        self.assertEqual(restored.store.G.number_of_nodes(), 2)
+        self.assertEqual(len(restored.list_documents()), 1)
+
+    def test_delete_failure_preserves_data_and_committed_delete_recovers(self):
+        service = RagService()
+        doc = service.ingest([("sample.txt", b"A")])[0]["doc_id"]
+        with patch.object(EntityExtractor, "extract", return_value=extraction()):
+            service.build_graph()
+        with patch.object(GraphStore, "save", side_effect=OSError("disk full")):
+            with self.assertRaises(OSError):
+                service.delete_document(doc)
+        self.assertEqual(len(service.list_documents()), 1)
+        self.assertEqual(service.store.G.number_of_nodes(), 2)
+        with patch.object(service.chunks, "delete_document", side_effect=OSError("cleanup interrupted")):
+            self.assertTrue(service.delete_document(doc))
+        self.assertEqual(service.list_documents(), [])
+        self.assertEqual(service.store.G.number_of_nodes(), 0)
+        with patch.object(EntityExtractor, "extract") as model:
+            service.build_graph()
+        model.assert_not_called()
+        restored = RagService()
+        restored.load()
+        self.assertEqual(restored.chunks.iter_chunks(), [])
+        self.assertFalse(restored.chunks._extraction_file(f"{doc}:0").exists())
+
+    def test_delete_refuses_to_lose_uncached_remaining_facts(self):
+        service = RagService()
+        docs = service.ingest([("a.txt", b"A"), ("b.txt", b"B")])
+        with patch.object(EntityExtractor, "extract", return_value=extraction()):
+            service.build_graph()
+        service.chunks._extraction_file(f"{docs[1]['doc_id']}:0").unlink()
+        with self.assertRaisesRegex(ValueError, "缓存"):
+            service.delete_document(docs[0]["doc_id"])
+        self.assertEqual(len(service.list_documents()), 2)
+
     def test_seed_count_respects_node_limit(self):
         store = GraphStore()
         seeds = [store.upsert_entity(entity(name), "doc:0") for name in ("甲", "乙")]

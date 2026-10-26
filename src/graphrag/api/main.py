@@ -11,7 +11,7 @@ from graphrag.pipeline.service import service
 
 @asynccontextmanager
 async def lifespan(_app: FastAPI):
-    service.store.load()
+    service.load()
     yield
 
 

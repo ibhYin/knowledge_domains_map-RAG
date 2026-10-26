@@ -102,14 +102,15 @@ async def ingest_documents(files: list[UploadFile]):
         content = await f.read()
         results.append((f.filename or "unnamed", content))
     try:
-        return {"ingested": service.ingest(results)}
+        with _jobs_lock:
+            return {"ingested": service.ingest(results)}
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
 
 
 @router.get("/documents")
 def list_documents():
-    return {"documents": service.chunks.list_documents()}
+    return {"documents": service.list_documents()}
 
 
 @router.delete("/documents/{doc_id}")
@@ -117,9 +118,12 @@ def delete_document(doc_id: str):
     with _jobs_lock:
         if any(state["status"] == "running" for state in _jobs.values()):
             raise HTTPException(status_code=409, detail="构建中不能删除文档，请等待任务结束。")
-        if not service.chunks.delete_document(doc_id):
-            raise HTTPException(status_code=404, detail=f"文档不存在: {doc_id}")
-    return {"deleted": doc_id}
+        try:
+            if not service.delete_document(doc_id):
+                raise HTTPException(status_code=404, detail=f"文档不存在: {doc_id}")
+        except ValueError as exc:
+            raise HTTPException(status_code=409, detail=str(exc)) from exc
+    return {"deleted": doc_id, "graph_updated": True}
 
 
 @router.post("/graph/build")
@@ -183,14 +187,16 @@ def clear_graph():
         if any(state["status"] == "running" for state in _jobs.values()):
             raise HTTPException(status_code=409, detail="构建中不能清空图谱，请等待任务结束。")
         with service._lock:
+            deleted = service.store.meta.get("deleted_documents", [])
             service.store.clear()
+            service.store.meta["deleted_documents"] = deleted
             service.store.save()
     return {"cleared": True}
 
 
 @router.get("/overview")
 def overview():
-    docs = service.chunks.list_documents()
+    docs = service.list_documents()
     stats = service.store.stats()
     return {
         "documents": len(docs),

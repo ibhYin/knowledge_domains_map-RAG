@@ -36,6 +36,53 @@ class RagService:
         self.search = GraphSearch(self.store)
         self._lock = threading.Lock()
 
+    def load(self) -> None:
+        self.store.load()
+        self._finish_deletions()
+
+    def list_documents(self) -> list[dict]:
+        deleted = set(self.store.meta.get("deleted_documents", []))
+        return [d for d in self.chunks.list_documents() if d["doc_id"] not in deleted]
+
+    def _finish_deletions(self) -> None:
+        for doc_id in self.store.meta.get("deleted_documents", []):
+            try:
+                self.chunks.delete_document(doc_id)
+            except OSError:
+                logger.warning("文档已逻辑删除，物理清理将在重启时重试: %s", doc_id)
+
+    def delete_document(self, doc_id: str) -> bool:
+        if doc_id not in {d["doc_id"] for d in self.list_documents()}:
+            return False
+        deleted = set(self.store.meta.get("deleted_documents", [])) | {doc_id}
+        snapshot = GraphStore()
+        snapshot.meta["processed_chunks"] = {}
+        snapshot.meta["graph_version"] = self.store.meta.get("graph_version", 0)
+        fingerprint = self.store.meta.get("extraction_fingerprint", "")
+        snapshot.meta["extraction_fingerprint"] = fingerprint
+        # ponytail: 删除时 O(全部剩余分块) 本地重放；规模触顶后再做增量撤销。
+        for record in self.chunks.iter_chunks():
+            source = record["metadata"]["doc_id"]
+            if source in deleted:
+                continue
+            cid = chunk_id_of(source, record["chunk_index"])
+            digest = content_hash(record["content"])
+            ext = self.chunks.load_extraction(cid, digest, fingerprint)
+            if ext is None:
+                if cid in self.store.meta.get("processed_chunks", {}):
+                    raise ValueError("剩余文档缺少有效抽取缓存，无法安全删除，请先重新构建。")
+                continue
+            snapshot.add_extraction(ext, cid)
+            snapshot.meta["processed_chunks"][cid] = digest
+        snapshot.meta["built_at"] = time.strftime("%Y-%m-%d %H:%M:%S")
+        # 删除记录与新图同一文件提交；清理中断后仍屏蔽旧分块，并在启动时重试。
+        snapshot.meta["deleted_documents"] = sorted(deleted)
+        snapshot.save()
+        with self._lock:
+            self.store.G, self.store.resolver, self.store.meta = snapshot.G, snapshot.resolver, snapshot.meta
+        self._finish_deletions()
+        return True
+
     # ---------- ingest ----------
 
     def ingest(self, files: list[tuple[str, bytes]]) -> list[dict]:
@@ -64,6 +111,8 @@ class RagService:
         progress=None,
     ) -> dict:
         records = self.chunks.iter_chunks(doc_ids)
+        deleted = set(self.store.meta.get("deleted_documents", []))
+        records = [r for r in records if r["metadata"]["doc_id"] not in deleted]
         config = fresh_llm_config()
         fingerprint = content_hash(json.dumps({
             "config": {k: v for k, v in config.items() if k not in {"openai_api_key", "temperature_answer"}},
@@ -80,7 +129,7 @@ class RagService:
                    for r in records)
         )
         if reset:
-            records = self.chunks.iter_chunks()
+            records = [r for r in self.chunks.iter_chunks() if r["metadata"]["doc_id"] not in deleted]
             processed = {}
         todo = []
         for record in records:
@@ -104,6 +153,7 @@ class RagService:
                 working_store.clear()
                 working_store.meta["processed_chunks"] = {}
                 working_store.meta["graph_version"] = version
+                working_store.meta["deleted_documents"] = sorted(deleted)
             working_store.meta["extraction_fingerprint"] = fingerprint
         saved_success_count = 0
         checkpoint_processed = 0
