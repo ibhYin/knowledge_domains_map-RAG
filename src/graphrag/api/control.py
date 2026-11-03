@@ -9,7 +9,8 @@ from fastapi import APIRouter, HTTPException
 
 _SUPERVISOR_URL = "http://127.0.0.1:8001"
 
-router = APIRouter(prefix="/api")
+# 挂载于 routes 的主 router（已带 /api 前缀），此处不再重复声明前缀
+router = APIRouter()
 
 
 def proxy_supervisor(path: str, method: str = "GET", body: dict | None = None):
