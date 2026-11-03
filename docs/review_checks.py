@@ -31,7 +31,7 @@ import httpx
 from fastapi.testclient import TestClient
 from langchain_core.messages import AIMessage
 from langchain_core.runnables import RunnableLambda
-from openai import APIConnectionError
+from openai import APIConnectionError, ContentFilterFinishReasonError
 
 from graphrag.api import routes
 from graphrag.api.main import app
@@ -182,6 +182,19 @@ class ReviewChecks(unittest.TestCase):
         self.assertIs(raised.exception.__cause__, error)
         self.assertNotIn("sensitive-provider-detail", str(raised.exception))
         self.assertNotIn("sensitive-provider-detail", "\n".join(logs.output))
+
+    def test_content_filter_rejection_does_not_kill_batch(self):
+        # ContentFilterFinishReasonError 继承 OpenAIError 而非 APIError，
+        # 漏接会让单个敏感分块炸掉整轮构建线程（2026-11-04 构建中断根因）。
+        error = ContentFilterFinishReasonError()
+        document, query = EntityExtractor(), QueryEntityExtractor()
+        for extractor in (document, query):
+            extractor._chain = Mock(invoke=Mock(side_effect=error))
+        with self.assertLogs("graphrag.llm.extractor", level="WARNING"):
+            self.assertIsNone(document.extract("文本"))
+            with self.assertRaises(QueryExtractionError) as raised:
+                query.extract("问题")
+        self.assertIs(raised.exception.__cause__, error)
 
     def test_programming_errors_are_not_silenced(self):
         for cls in (EntityExtractor, QueryEntityExtractor):

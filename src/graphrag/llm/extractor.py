@@ -7,7 +7,7 @@ from langchain_core.exceptions import OutputParserException
 from langchain_core.messages import SystemMessage
 from langchain_core.prompts import ChatPromptTemplate
 from langchain_core.runnables import Runnable
-from openai import APIError
+from openai import OpenAIError
 from pydantic import ValidationError
 
 from graphrag.config import fresh_llm_config
@@ -128,7 +128,7 @@ class EntityExtractor:
         for attempt in (1, 2):
             try:
                 result = chain.invoke({"text": text})
-            except (APIError, OutputParserException) as exc:
+            except (OpenAIError, OutputParserException) as exc:
                 last_warning = f"实体抽取调用失败(第{attempt}次): {type(exc).__name__}"
                 continue
             # with_structured_output include_raw=True 返回 {"raw":..., "parsed":...}
@@ -170,7 +170,7 @@ class QueryEntityExtractor:
         for attempt in (1, 2):
             try:
                 result = chain.invoke({"text": question})
-            except (APIError, OutputParserException) as exc:
+            except (OpenAIError, OutputParserException) as exc:
                 last_error = exc
                 message = "问题实体识别服务调用失败，请稍后重试。"
                 continue
