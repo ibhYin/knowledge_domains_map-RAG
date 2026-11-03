@@ -3,6 +3,7 @@ import json
 import logging
 import re
 import shutil
+import threading
 import time
 from pathlib import Path
 
@@ -24,6 +25,28 @@ def content_hash(text: str) -> str:
 
 
 class ChunkStore:
+    """分块存储。JSONL 落盘之外维护惰性内存索引：iter_chunks 直接走索引，
+    问答/构建不再每次重读全部语料。索引由本进程独占维护（外部改动需重启后端）。"""
+
+    def __init__(self):
+        self._index: dict[str, list[dict]] | None = None
+        self._index_lock = threading.Lock()
+
+    def _ensure_index(self) -> dict[str, list[dict]]:
+        with self._index_lock:
+            if self._index is None:
+                index: dict[str, list[dict]] = {}
+                for path in sorted(settings.chunks_dir.glob("*.jsonl")):
+                    records = []
+                    with path.open("r", encoding="utf-8") as f:
+                        for line in f:
+                            line = line.strip()
+                            if line:
+                                records.append(json.loads(line))
+                    index[path.stem] = records
+                self._index = index
+            return self._index
+
     def _extraction_file(self, chunk_id: str) -> Path:
         if not re.fullmatch(r"[A-Za-z0-9_-]+:[0-9]+", chunk_id):
             raise ValueError("无效的分块 ID")
@@ -53,6 +76,7 @@ class ChunkStore:
     def save_chunks(self, doc_id: str, chunks: list[Document]) -> None:
         path = self._chunk_file(doc_id)
         path.parent.mkdir(parents=True, exist_ok=True)
+        records = []
         with path.open("w", encoding="utf-8") as f:
             for chunk in chunks:
                 record = {
@@ -60,24 +84,19 @@ class ChunkStore:
                     "content": chunk.page_content,
                     "metadata": chunk.metadata,
                 }
+                records.append(record)
                 f.write(json.dumps(record, ensure_ascii=False) + "\n")
+        with self._index_lock:
+            if self._index is not None:
+                self._index[doc_id] = records
 
     def iter_chunks(self, doc_ids: list[str] | None = None) -> list[dict]:
-        if doc_ids is None:
-            paths = sorted(settings.chunks_dir.glob("*.jsonl"))
-        else:
-            paths = [self._chunk_file(d) for d in doc_ids]
+        """返回分块记录。记录为索引内共享引用，调用方只读不得修改。"""
+        index = self._ensure_index()
+        keys = sorted(index) if doc_ids is None else doc_ids
         out = []
-        for path in paths:
-            if not path.exists():
-                continue
-            with path.open("r", encoding="utf-8") as f:
-                for line in f:
-                    line = line.strip()
-                    if not line:
-                        continue
-                    record = json.loads(line)
-                    out.append(record)
+        for doc_id in keys:
+            out.extend(index.get(doc_id, []))
         return out
 
     # ---------- 文档注册表 ----------
@@ -121,4 +140,7 @@ class ChunkStore:
         extraction_dir = self._extraction_file(f"{doc_id}:0").parent
         if extraction_dir.exists():
             shutil.rmtree(extraction_dir)
+        with self._index_lock:
+            if self._index is not None:
+                self._index.pop(doc_id, None)
         return existed
