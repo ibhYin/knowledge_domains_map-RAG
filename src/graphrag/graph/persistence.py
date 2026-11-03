@@ -11,9 +11,10 @@ def _write_json(data: dict | list, path: Path) -> None:
     path.parent.mkdir(parents=True, exist_ok=True)
     temporary = None
     try:
+        # 紧凑序列化：graph.json 数万节点时体积与写入时间约减半（文件仅供程序读写）。
         with tempfile.NamedTemporaryFile(mode="w", encoding="utf-8", dir=path.parent, delete=False) as f:
             temporary = Path(f.name)
-            json.dump(data, f, ensure_ascii=False, indent=2, default=str)
+            json.dump(data, f, ensure_ascii=False, separators=(",", ":"), default=str)
             f.flush()
             os.fsync(f.fileno())
         os.replace(temporary, path)
