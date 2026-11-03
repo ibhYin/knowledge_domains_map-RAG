@@ -141,6 +141,7 @@ class RagService:
         max_edges: int = 80,
         seed_override: list[str] | None = None,
     ) -> dict:
+        t0 = time.perf_counter()
         with self._lock:
             store = copy(self.store)
         result = self.search.search(
@@ -148,9 +149,11 @@ class RagService:
         )
         subgraph = result["subgraph"]
         edges = result["edges"]
+        t1 = time.perf_counter()
 
         if subgraph.number_of_nodes() == 0:
             context = ""
+            timings = {"retrieval_ms": round((t1 - t0) * 1000, 1), "sources_ms": 0.0, "llm_ms": 0.0}
             grounded = {"answer": "图谱中没有检索到与问题相关的实体，无法回答。请尝试换个问法，或先上传文档并构建图谱。",
                         "sentences": [], "sources": [], "retrieved_sources": [], "used_docs": [], "verification": "insufficient"}
         else:
@@ -159,8 +162,13 @@ class RagService:
                 documents = self.list_documents()
                 records = self.chunks.iter_chunks([d["doc_id"] for d in documents])
             sources = collect_sources(documents, records, subgraph, edges)
+            t2 = time.perf_counter()
             llm = self._get_answer_llm()
             grounded = answer_with_evidence(llm, question, context, sources)
+            t3 = time.perf_counter()
+            timings = {"retrieval_ms": round((t1 - t0) * 1000, 1),
+                       "sources_ms": round((t2 - t1) * 1000, 1),
+                       "llm_ms": round((t3 - t2) * 1000, 1)}
         return {
             **grounded,
             "matched_entities": result["matched_entities"],
@@ -169,6 +177,7 @@ class RagService:
             "node_count": subgraph.number_of_nodes(),
             "edge_count": len(edges),
             MetaKeys.GRAPH_VERSION: store.meta.get(MetaKeys.GRAPH_VERSION, 0),
+            "timings": timings,
         }
 
 
