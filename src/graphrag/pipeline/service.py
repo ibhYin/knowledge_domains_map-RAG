@@ -27,6 +27,7 @@ class RagService:
         self.store = GraphStore()
         self.search = GraphSearch(self.store)
         self._lock = threading.Lock()
+        self._answer_llm_cache: tuple[str, object] | None = None  # (配置指纹, ChatOpenAI)
 
     def load(self) -> None:
         self.store.load()
@@ -285,6 +286,14 @@ class RagService:
 
     # ---------- query ----------
 
+    def _get_answer_llm(self):
+        """按配置指纹复用问答 LLM；「模型设置」保存后指纹变化即重建，下次调用生效。"""
+        cfg = fresh_llm_config()
+        fingerprint = json.dumps(cfg, sort_keys=True, ensure_ascii=False)
+        if self._answer_llm_cache is None or self._answer_llm_cache[0] != fingerprint:
+            self._answer_llm_cache = (fingerprint, build_llm(temperature=cfg["temperature_answer"], config=cfg))
+        return self._answer_llm_cache[1]
+
     def answer(
         self,
         question: str,
@@ -311,7 +320,7 @@ class RagService:
                 documents = self.list_documents()
                 records = self.chunks.iter_chunks([d["doc_id"] for d in documents])
             sources = collect_sources(documents, records, subgraph, edges)
-            llm = build_llm(temperature=settings.temperature_answer)
+            llm = self._get_answer_llm()
             grounded = answer_with_evidence(llm, question, context, sources)
         return {
             **grounded,
