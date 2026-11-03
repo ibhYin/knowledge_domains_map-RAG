@@ -619,8 +619,8 @@ class ReviewChecks(unittest.TestCase):
                     Thread=lambda target, daemon: SimpleNamespace(start=target)
                 )
                 with patch.object(routes, "service", service), \
-                     patch.object(routes, "threading", synchronous_threads), \
-                     patch.object(routes, "_jobs", {}), \
+                     patch("graphrag.api.jobs.threading", synchronous_threads), \
+                     patch.object(routes.job_manager, "_jobs", {}), \
                      patch.object(EntityExtractor, "extract", side_effect=extract), \
                      patch.object(GraphStore, "save", autospec=True,
                                   side_effect=OSError("disk full") if outcome == "save_error" else save):
@@ -640,8 +640,8 @@ class ReviewChecks(unittest.TestCase):
             "111111111111": {"status": "running", "processed": 7, "total": 20},
             "222222222222": {"status": "done", "processed": 1, "total": 1},
         }
-        with patch.object(routes, "_jobs", jobs), \
-             patch.object(routes, "threading", SimpleNamespace(Thread=Mock())) as thread_api:
+        with patch.object(routes.job_manager, "_jobs", jobs), \
+             patch("graphrag.api.jobs.threading", SimpleNamespace(Thread=Mock())) as thread_api:
             client = TestClient(app)
             current = client.get("/api/graph/build/current").json()
             self.assertEqual(current["job_id"], "111111111111")
@@ -846,7 +846,7 @@ class ReviewChecks(unittest.TestCase):
         service = RagService()
         add_extraction(service.store, extraction(), "doc:0")
         with patch.object(routes, "service", service), \
-             patch.object(routes, "_jobs", {"test": {"status": "running"}}), \
+             patch.object(routes.job_manager, "_jobs", {"test": {"status": "running"}}), \
              patch.object(service.chunks, "delete_document") as delete, \
              patch.object(service.store, "save") as save:
             client = TestClient(app)

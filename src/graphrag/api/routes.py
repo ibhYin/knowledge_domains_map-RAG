@@ -2,7 +2,6 @@ import json
 import os
 import threading
 import time
-import uuid
 from pathlib import Path
 from typing import Optional
 
@@ -11,6 +10,7 @@ from fastapi import APIRouter, HTTPException, Query, UploadFile
 from fastapi.concurrency import run_in_threadpool
 from fastapi.responses import PlainTextResponse
 
+from graphrag.api.jobs import JobConflict, JobManager
 from graphrag.config import fresh_llm_config, settings, write_env
 from graphrag.graph.persistence import _write_json
 from graphrag.llm.extractor import QueryExtractionError
@@ -19,8 +19,7 @@ from graphrag.schemas.api import BuildRequest, QueryRequest
 
 router = APIRouter(prefix="/api")
 
-_jobs: dict[str, dict] = {}
-_jobs_lock = threading.Lock()
+job_manager = JobManager()
 
 # 进程启动时记录，用于在页面上确认后端加载的是哪一版代码。
 _STARTED_AT = time.strftime("%Y-%m-%d %H:%M:%S")
@@ -56,31 +55,6 @@ def _load_history() -> list[dict]:
 def _save_history(history: list[dict]) -> None:
     _HISTORY_FILE.parent.mkdir(parents=True, exist_ok=True)
     _write_json(history[-_HISTORY_LIMIT:], _HISTORY_FILE)
-
-
-def _start_build_job(doc_ids: Optional[list[str]]) -> str:
-    job_id = uuid.uuid4().hex[:12]
-    with _jobs_lock:
-        for existing_id, state in _jobs.items():
-            if state["status"] == "running":
-                return existing_id
-        if any(state["status"] == "deleting" for state in _jobs.values()):
-            raise HTTPException(status_code=409, detail="正在删除文档，请等待删除完成后重新构建。")
-        _jobs[job_id] = {"status": "running", "processed": 0, "total": 0, "error": None}
-
-    def _run():
-        def progress(state: dict):
-            with _jobs_lock:
-                _jobs[job_id].update(state)
-
-        try:
-            service.build_graph(doc_ids=doc_ids, progress=progress)
-        except Exception as exc:  # noqa: BLE001
-            with _jobs_lock:
-                _jobs[job_id].update({"status": "error", "error": str(exc)})
-
-    threading.Thread(target=_run, daemon=True).start()
-    return job_id
 
 
 @router.get("/health")
@@ -123,15 +97,12 @@ def list_documents():
 
 @router.delete("/documents/{doc_id}")
 def delete_document(doc_id: str):
-    # 全量重放耗时长，只在一瞬间持锁注册 deleting 占位（与构建/清空互斥），
-    # 重放本身在锁外执行，构建状态轮询不再被阻塞。
-    placeholder = f"delete-{uuid.uuid4().hex[:8]}"
-    with _jobs_lock:
-        if any(state["status"] == "running" for state in _jobs.values()):
-            raise HTTPException(status_code=409, detail="构建中不能删除文档，请等待任务结束。")
-        if any(state["status"] == "deleting" for state in _jobs.values()):
-            raise HTTPException(status_code=409, detail="正在删除文档，请稍后再试。")
-        _jobs[placeholder] = {"status": "deleting", "processed": 0, "total": 0, "error": None}
+    # 全量重放耗时长，只在一瞬间注册 deleting 占位（与构建/清空互斥），
+    # 重放本身在任务锁外执行，构建状态轮询不再被阻塞。
+    try:
+        placeholder = job_manager.register_deleting()
+    except JobConflict as exc:
+        raise HTTPException(status_code=409, detail=str(exc)) from exc
     try:
         try:
             if not service.delete_document(doc_id):
@@ -139,21 +110,23 @@ def delete_document(doc_id: str):
         except ValueError as exc:
             raise HTTPException(status_code=409, detail=str(exc)) from exc
     finally:
-        with _jobs_lock:
-            _jobs.pop(placeholder, None)
+        job_manager.release(placeholder)
     return {"deleted": doc_id, "graph_updated": True}
 
 
 @router.post("/graph/build")
 def build_graph(body: BuildRequest):
-    job_id = _start_build_job(body.doc_ids)
+    try:
+        job_id = job_manager.start_build(
+            lambda progress: service.build_graph(doc_ids=body.doc_ids, progress=progress))
+    except JobConflict as exc:
+        raise HTTPException(status_code=409, detail=str(exc)) from exc
     return {"job_id": job_id}
 
 
 @router.get("/graph/build/status/{job_id}")
 def build_status(job_id: str):
-    with _jobs_lock:
-        job = _jobs.get(job_id)
+    job = job_manager.get(job_id)
     if job is None:
         raise HTTPException(status_code=404, detail=f"任务不存在: {job_id}")
     return job
@@ -161,11 +134,7 @@ def build_status(job_id: str):
 
 @router.get("/graph/build/current")
 def current_build():
-    with _jobs_lock:
-        jobs = [(key, state) for key, state in _jobs.items() if state["status"] != "deleting"]
-        current = next(((key, state) for key, state in reversed(jobs) if state["status"] == "running"),
-                       jobs[-1] if jobs else None)
-        return {"job_id": current[0], **current[1]} if current else {"job_id": None}
+    return job_manager.current() or {"job_id": None}
 
 
 @router.get("/graph/stats")
@@ -201,14 +170,13 @@ def graph_export(fmt: str = "graphml"):
 
 @router.post("/graph/clear")
 def clear_graph():
-    with _jobs_lock:
-        if any(state["status"] in {"running", "deleting"} for state in _jobs.values()):
-            raise HTTPException(status_code=409, detail="有任务进行中，请等待结束后再清空图谱。")
-        with service._lock:
-            deleted = service.store.meta.get("deleted_documents", [])
-            service.store.clear()
-            service.store.meta["deleted_documents"] = deleted
-            service.store.save()
+    if job_manager.has_active():
+        raise HTTPException(status_code=409, detail="有任务进行中，请等待结束后再清空图谱。")
+    with service._lock:
+        deleted = service.store.meta.get("deleted_documents", [])
+        service.store.clear()
+        service.store.meta["deleted_documents"] = deleted
+        service.store.save()
     return {"cleared": True}
 
 
