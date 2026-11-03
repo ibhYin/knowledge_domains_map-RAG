@@ -20,6 +20,8 @@ class Settings(BaseSettings):
     temperature_answer: float = 0.3
     structured_output_method: str = "json_mode"
     extraction_thinking: Literal["enabled", "disabled"] | None = None
+    llm_timeout: int = Field(default=120, ge=1)
+    llm_max_retries: int = Field(default=3, ge=0)
 
     # 分块
     chunk_size: int = 600
