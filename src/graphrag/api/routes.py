@@ -1,4 +1,5 @@
 import os
+import threading
 import time
 from pathlib import Path
 from typing import Optional
@@ -55,6 +56,9 @@ def health():
     }
 
 
+_ingest_lock = threading.Lock()
+
+
 @router.post("/documents/ingest")
 async def ingest_documents(files: list[UploadFile]):
     results = []
@@ -63,7 +67,7 @@ async def ingest_documents(files: list[UploadFile]):
         results.append((f.filename or "unnamed", content))
 
     def _do_ingest():
-        with _jobs_lock:
+        with _ingest_lock:  # 串行化并发上传（注册表读改写互斥）
             return {"ingested": service.ingest(results)}
 
     try:

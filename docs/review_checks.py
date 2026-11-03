@@ -842,6 +842,18 @@ class ReviewChecks(unittest.TestCase):
         self.assertTrue(all(e["source"] in ids and e["target"] in ids for e in preview["links"]))
         self.assertEqual(len({e["id"] for e in preview["links"]}), len(preview["links"]))
 
+    def test_ingest_endpoint_writes_chunks_and_registry(self):
+        """端点级回归：阶段 3 重构时 ingest 曾引用已删除的 _jobs_lock（service 层冒烟测不出）。"""
+        service = RagService()
+        with patch.object(routes, "service", service):
+            client = TestClient(app)
+            response = client.post("/api/documents/ingest",
+                                   files={"files": ("sample.txt", "星辰科技与清华大学合作。".encode("utf-8"))})
+        self.assertEqual(response.status_code, 200, response.text)
+        self.assertEqual(len(response.json()["ingested"]), 1)
+        self.assertEqual(len(service.list_documents()), 1)
+        self.assertTrue(service.chunks.iter_chunks())
+
     def test_running_build_blocks_clear_and_document_delete(self):
         service = RagService()
         add_extraction(service.store, extraction(), "doc:0")
