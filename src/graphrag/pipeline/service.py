@@ -131,26 +131,28 @@ class RagService:
             "prompt": EXTRACTION_SYSTEM_PROMPT, "schema": ChunkExtraction.model_json_schema(),
         }, sort_keys=True, ensure_ascii=False))
         processed = self.store.meta.get("processed_chunks", {})
-        reset = bool(processed) and (
-            self.store.meta.get("extraction_fingerprint") != fingerprint
-            or any(processed.get(chunk_id_of(r["metadata"]["doc_id"], r["chunk_index"]))
-                   not in (None, content_hash(r["content"])) for r in records)
-            or any(processed.get(chunk_id_of(r["metadata"]["doc_id"], r["chunk_index"])) is not None
-                   and self.chunks.load_extraction(chunk_id_of(r["metadata"]["doc_id"], r["chunk_index"]),
-                                                   content_hash(r["content"]), fingerprint) is None
-                   for r in records)
-        )
+        # 指纹一致时 _extractions 即经校验的有效抽取（启动加载/发布换图时同步维护），
+        # 单次遍历完成 reset 判定与 todo 收集，不再重复读盘、重复计算内容哈希。
+        cached = self.store._extractions if self.store.meta.get("extraction_fingerprint") == fingerprint else {}
+        reset = bool(processed) and self.store.meta.get("extraction_fingerprint") != fingerprint
+        todo = []
+        if not reset:
+            for record in records:
+                doc_id = record.get("metadata", {}).get("doc_id", "")
+                cid = chunk_id_of(doc_id, record["chunk_index"])
+                h = content_hash(record["content"])
+                state = processed.get(cid)
+                if state is not None and state != h:
+                    reset = True  # 分块内容与成功记录不符，旧抽取全部失效
+                    break
+                if state == h and cid not in cached:
+                    reset = True  # 已处理分块缺少有效抽取缓存，全量重建更安全
+                    break
+                todo.append((cid, record["content"], h, cached.get(cid)))
         if reset:
             records = [r for r in self.chunks.iter_chunks() if r["metadata"]["doc_id"] not in deleted]
-            processed = {}
-        todo = []
-        for record in records:
-            doc_id = record.get("metadata", {}).get("doc_id", "")
-            cid = chunk_id_of(doc_id, record["chunk_index"])
-            h = content_hash(record["content"])
-            if processed.get(cid) == h and self.chunks.load_extraction(cid, h, fingerprint) is not None:
-                continue
-            todo.append((cid, record["content"], h))
+            todo = [(chunk_id_of(r.get("metadata", {}).get("doc_id", ""), r["chunk_index"]),
+                     r["content"], content_hash(r["content"]), None) for r in records]
 
         total = len(todo)
         if progress:
@@ -184,8 +186,8 @@ class RagService:
             raise RuntimeError(f"模型配置不可用，请检查「模型设置」: {type(exc).__name__}") from exc
 
         def extract_task(item):
-            cid, text, h = item
-            ext = self.chunks.load_extraction(cid, h, fingerprint)
+            cid, text, h, cached_ext = item
+            ext = cached_ext if cached_ext is not None else self.chunks.load_extraction(cid, h, fingerprint)
             if ext is None:
                 ext = extractor.extract(text)
                 if ext is not None:
