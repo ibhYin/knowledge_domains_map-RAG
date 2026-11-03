@@ -703,7 +703,7 @@ class ReviewChecks(unittest.TestCase):
         restored.load()
         self.assertEqual(len(restored.meta["processed_chunks"]), 1)
         resumed = RagService()
-        resumed.store.load()
+        resumed.store.load(resumed.chunks.load_extraction)
         with patch.object(resumed.chunks, "iter_chunks", return_value=records), \
              patch.object(EntityExtractor, "extract", return_value=extraction()) as extract:
             result = resumed.build_graph()

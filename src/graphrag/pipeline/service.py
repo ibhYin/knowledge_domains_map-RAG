@@ -28,7 +28,7 @@ class RagService:
         self._answer_llm_cache: tuple[str, object] | None = None  # (配置指纹, ChatOpenAI)
 
     def load(self) -> None:
-        self.store.load()
+        self.store.load(extraction_loader=self.chunks.load_extraction)
         self._finish_deletions()
 
     def list_documents(self) -> list[dict]:

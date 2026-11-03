@@ -6,7 +6,7 @@ from itertools import islice
 import networkx as nx
 
 from graphrag.config import settings
-from graphrag.graph.entity_resolver import EntityResolver
+from graphrag.graph.entity_resolver import EntityResolver, normalize
 from graphrag.graph.persistence import export_graphml, load_graph, load_meta, save_graph, save_meta
 from graphrag.schemas.extraction import ChunkExtraction, Entity, Relation
 
@@ -31,16 +31,24 @@ class GraphStore:
 
     # ---------- 持久化 ----------
 
-    def load(self) -> None:
+    def load(self, extraction_loader=None) -> None:
+        """从磁盘加载图谱快照。
+
+        extraction_loader(cid, digest, fingerprint) 由调用方注入（pipeline 层传入
+        抽取缓存读取函数）；graph 层不再反向依赖 pipeline。不传时 _extractions 为空，
+        仅恢复图与 meta。
+        """
         self.G, meta = load_graph(settings.graph_file)
         if meta is None:
             meta = load_meta(settings.graph_meta_file)
         self.meta = {**deepcopy(DEFAULT_META), **meta}
         self.resolver = EntityResolver(self.meta.get("alias_map", {}))
         self._extractions = {}
-        from graphrag.pipeline.chunk_store import ChunkStore
+        if extraction_loader is None:
+            return
+        fingerprint = self.meta.get("extraction_fingerprint", "")
         for cid, digest in self.meta.get("processed_chunks", {}).items():
-            ext = ChunkStore().load_extraction(cid, digest, self.meta.get("extraction_fingerprint", ""))
+            ext = extraction_loader(cid, digest, fingerprint)
             if ext is not None:
                 self._extractions[cid] = ext
 
@@ -75,9 +83,9 @@ class GraphStore:
             for ent in ext.entities:
                 key = self._merge_entity(ent, cid)
                 for name in [ent.name, *ent.aliases]:
-                    endpoints.setdefault(normalize_str(name), set()).add(key)
+                    endpoints.setdefault(normalize(name), set()).add(key)
             for rel in ext.relations:
-                sources, targets = endpoints.get(normalize_str(rel.source), set()), endpoints.get(normalize_str(rel.target), set())
+                sources, targets = endpoints.get(normalize(rel.source), set()), endpoints.get(normalize(rel.target), set())
                 if len(sources) == len(targets) == 1:
                     self._merge_relation(rel, cid, next(iter(sources)), next(iter(targets)))
 
@@ -94,7 +102,7 @@ class GraphStore:
         if key in self.G:
             n = self.G.nodes[key]
             canonical = self._key_name(key)
-            if normalize_str(n["name"]) != canonical and normalize_str(ent.name) == canonical:
+            if normalize(n["name"]) != canonical and normalize(ent.name) == canonical:
                 n["name"] = ent.name
             if chunk_id not in n["source_chunks"]:
                 n["source_chunks"].append(chunk_id)
@@ -223,8 +231,8 @@ class GraphStore:
         for n, data in self.G.nodes(data=True):
             node_name = data.get("name", n)
             aliases = data.get("aliases", [])
-            if norm in normalize_str(node_name) or any(
-                norm in normalize_str(a) for a in aliases
+            if norm in normalize(node_name) or any(
+                norm in normalize(a) for a in aliases
             ):
                 cands.append(n)
         if len(cands) == 1:
@@ -267,14 +275,14 @@ class GraphStore:
     # ---------- 图谱浏览器 ----------
 
     def search_entities(self, q: str, limit: int = 20) -> list[dict]:
-        q_norm = normalize_str(q)
+        q_norm = normalize(q)
         if not q_norm:
             return []
         results = []
         for n, data in self.G.nodes(data=True):
             name = data.get("name", n)
             aliases = data.get("aliases", [])
-            if q_norm in normalize_str(name) or any(q_norm in normalize_str(a) for a in aliases):
+            if q_norm in normalize(name) or any(q_norm in normalize(a) for a in aliases):
                 results.append(
                     {
                         "id": n,
@@ -342,8 +350,3 @@ class GraphStore:
     def export_graphml(self) -> str:
         return export_graphml(self.G)
 
-
-def normalize_str(s: str) -> str:
-    from graphrag.graph.entity_resolver import normalize
-
-    return normalize(s)
