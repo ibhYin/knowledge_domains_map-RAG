@@ -104,9 +104,11 @@ class RagService:
     def _publish_snapshot(self, extractions: dict, meta: dict) -> None:
         """发布线程体：全量重放抽取、落盘、原子换图。
 
-        由单线程执行器串行调用，graph_version 随发布单调递增；
-        meta 是提交时的深拷贝，重放与序列化期间收割循环可继续推进。
+        由单线程执行器串行调用；版本号在执行时取当前已提交图谱的版本，
+        保证随发布单调递增（payload 捕获时的版本可能落后于上一拍发布）。
         """
+        with self._lock:
+            meta["graph_version"] = self.store.meta.get("graph_version", 0)
         snapshot = GraphStore()
         snapshot.meta = meta
         snapshot.rebuild(extractions)
@@ -146,9 +148,11 @@ class RagService:
                 if state is not None and state != h:
                     reset = True  # 分块内容与成功记录不符，旧抽取全部失效
                     break
-                if state == h and cid not in cached:
-                    reset = True  # 已处理分块缺少有效抽取缓存，全量重建更安全
-                    break
+                if state == h:
+                    if cid not in cached:
+                        reset = True  # 已处理分块缺少有效抽取缓存，全量重建更安全
+                        break
+                    continue  # 已处理且缓存有效，跳过
                 todo.append((cid, record["content"], h, cached.get(cid)))
         if reset:
             records = [r for r in self.chunks.iter_chunks() if r["metadata"]["doc_id"] not in deleted]
