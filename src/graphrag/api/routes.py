@@ -9,6 +9,7 @@ from fastapi.responses import PlainTextResponse
 
 from graphrag.api.control import router as control_router
 from graphrag.api.history import HistoryStore
+from graphrag.graph.meta import MetaKeys
 from graphrag.api.jobs import JobConflict, JobManager
 from graphrag.config import fresh_llm_config, settings, write_env
 from graphrag.llm.extractor import QueryExtractionError
@@ -44,7 +45,7 @@ def health():
     stats = service.store.stats()
     return {
         "status": "ok",
-        "model": service.store.meta.get("model") or "openai-compatible",
+        MetaKeys.MODEL: service.store.meta.get(MetaKeys.MODEL) or "openai-compatible",
         "graph_loaded": service.store.G.number_of_nodes() > 0,
         "nodes": stats["nodes"],
         "edges": stats["edges"],
@@ -155,9 +156,9 @@ def clear_graph():
     if job_manager.has_active():
         raise HTTPException(status_code=409, detail="有任务进行中，请等待结束后再清空图谱。")
     with service._lock:
-        deleted = service.store.meta.get("deleted_documents", [])
+        deleted = service.store.meta.get(MetaKeys.DELETED_DOCUMENTS, [])
         service.store.clear()
-        service.store.meta["deleted_documents"] = deleted
+        service.store.meta[MetaKeys.DELETED_DOCUMENTS] = deleted
         service.store.save()
     return {"cleared": True}
 

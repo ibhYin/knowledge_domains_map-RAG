@@ -10,6 +10,7 @@ from concurrent.futures import FIRST_COMPLETED, ThreadPoolExecutor, wait
 from copy import deepcopy
 
 from graphrag.config import settings
+from graphrag.graph.meta import MetaKeys
 from graphrag.graph.store import GraphStore
 from graphrag.llm.extractor import EXTRACTION_SYSTEM_PROMPT, EntityExtractor
 from graphrag.pipeline.chunk_store import chunk_id_of, content_hash
@@ -47,14 +48,14 @@ class BuildSession:
 
     def plan(self) -> None:
         store = self.service.store
-        deleted = set(store.meta.get("deleted_documents", []))
+        deleted = set(store.meta.get(MetaKeys.DELETED_DOCUMENTS, []))
         self.records = [r for r in self.service.chunks.iter_chunks(self.doc_ids)
                         if r["metadata"]["doc_id"] not in deleted]
-        processed = store.meta.get("processed_chunks", {})
+        processed = store.meta.get(MetaKeys.PROCESSED_CHUNKS, {})
         # 指纹一致时 _extractions 即经校验的有效抽取（启动加载/发布换图时同步维护），
         # 单次遍历完成 reset 判定与 todo 收集，不再重复读盘、重复计算内容哈希。
-        cached = store._extractions if store.meta.get("extraction_fingerprint") == self.fingerprint else {}
-        self.reset = bool(processed) and store.meta.get("extraction_fingerprint") != self.fingerprint
+        cached = store._extractions if store.meta.get(MetaKeys.EXTRACTION_FINGERPRINT) == self.fingerprint else {}
+        self.reset = bool(processed) and store.meta.get(MetaKeys.EXTRACTION_FINGERPRINT) != self.fingerprint
         todo = []
         if not self.reset:
             for record in self.records:
@@ -84,11 +85,11 @@ class BuildSession:
             self.extractions = dict(store._extractions)
             if self.reset:
                 self.extractions = {}
-                self.working_store.meta["graph_version"] = store.meta.get("graph_version", 0)
-                self.working_store.meta["deleted_documents"] = sorted(deleted)
+                self.working_store.meta[MetaKeys.GRAPH_VERSION] = store.meta.get(MetaKeys.GRAPH_VERSION, 0)
+                self.working_store.meta[MetaKeys.DELETED_DOCUMENTS] = sorted(deleted)
             else:
                 self.working_store.meta = deepcopy(store.meta)
-            self.working_store.meta["extraction_fingerprint"] = self.fingerprint
+            self.working_store.meta[MetaKeys.EXTRACTION_FINGERPRINT] = self.fingerprint
 
     # ---------- 发布时机 ----------
 
@@ -105,7 +106,7 @@ class BuildSession:
         self.plan()
         if self.progress:
             self.progress({"status": "running", "processed": 0, "total": self.total, "failed": 0,
-                           "graph_version": service.store.meta.get("graph_version", 0), "error": None})
+                           MetaKeys.GRAPH_VERSION: service.store.meta.get(MetaKeys.GRAPH_VERSION, 0), "error": None})
 
         # 大语料自适应：按总量把发布会次数限制在约 50 次以内，小语料维持原间隔。
         checkpoint_interval = max(settings.build_checkpoint_interval, (self.total + 49) // 50)
@@ -138,7 +139,7 @@ class BuildSession:
                         cid, h, ext = future.result()
                         if ext is not None:
                             self.extractions[cid] = ext
-                            self.working_store.meta.setdefault("processed_chunks", {})[cid] = h
+                            self.working_store.meta.setdefault(MetaKeys.PROCESSED_CHUNKS, {})[cid] = h
                         else:
                             self.failed += 1
                         self.done += 1
@@ -168,14 +169,14 @@ class BuildSession:
                         with service._lock:
                             nodes = service.store.G.number_of_nodes()
                             edges = service.store.G.number_of_edges()
-                            version = service.store.meta.get("graph_version", 0)
+                            version = service.store.meta.get(MetaKeys.GRAPH_VERSION, 0)
                         self.progress({
                             "status": "running", "processed": self.done, "total": self.total,
                             "failed": self.failed, "error": None,
                             "nodes": nodes,
                             "edges": edges,
                             "checkpoint_processed": self.checkpoint_processed,
-                            "graph_version": version,
+                            MetaKeys.GRAPH_VERSION: version,
                         })
             # 收尾发布：最后一批若因上次发布进行中被跳过，在此补发。
             if self.todo and self.done - self.failed > self.saved_success_count:

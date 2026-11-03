@@ -7,6 +7,7 @@ from copy import copy
 from pathlib import Path
 
 from graphrag.config import fresh_llm_config, settings
+from graphrag.graph.meta import MetaKeys
 from graphrag.graph.store import GraphStore
 from graphrag.llm.client import build_llm
 from graphrag.loaders.document_loader import SUPPORTED_EXTS, load_document
@@ -32,11 +33,11 @@ class RagService:
         self._finish_deletions()
 
     def list_documents(self) -> list[dict]:
-        deleted = set(self.store.meta.get("deleted_documents", []))
+        deleted = set(self.store.meta.get(MetaKeys.DELETED_DOCUMENTS, []))
         return [d for d in self.chunks.list_documents() if d["doc_id"] not in deleted]
 
     def _finish_deletions(self) -> None:
-        for doc_id in self.store.meta.get("deleted_documents", []):
+        for doc_id in self.store.meta.get(MetaKeys.DELETED_DOCUMENTS, []):
             try:
                 self.chunks.delete_document(doc_id)
             except OSError:
@@ -45,10 +46,10 @@ class RagService:
     def delete_document(self, doc_id: str) -> bool:
         if doc_id not in {d["doc_id"] for d in self.list_documents()}:
             return False
-        deleted = set(self.store.meta.get("deleted_documents", [])) | {doc_id}
-        fingerprint = self.store.meta.get("extraction_fingerprint", "")
-        meta = {"extraction_fingerprint": fingerprint, "deleted_documents": sorted(deleted),
-                "processed_chunks": {}}
+        deleted = set(self.store.meta.get(MetaKeys.DELETED_DOCUMENTS, [])) | {doc_id}
+        fingerprint = self.store.meta.get(MetaKeys.EXTRACTION_FINGERPRINT, "")
+        meta = {MetaKeys.EXTRACTION_FINGERPRINT: fingerprint, MetaKeys.DELETED_DOCUMENTS: sorted(deleted),
+                MetaKeys.PROCESSED_CHUNKS: {}}
         extractions = {}
         # ponytail: 删除时 O(全部剩余分块) 本地重放；规模触顶后再做增量撤销。
         for record in self.chunks.iter_chunks():
@@ -59,11 +60,11 @@ class RagService:
             digest = content_hash(record["content"])
             ext = self.chunks.load_extraction(cid, digest, fingerprint)
             if ext is None:
-                if cid in self.store.meta.get("processed_chunks", {}):
+                if cid in self.store.meta.get(MetaKeys.PROCESSED_CHUNKS, {}):
                     raise ValueError("剩余文档缺少有效抽取缓存，无法安全删除，请先重新构建。")
                 continue
             extractions[cid] = ext
-            meta["processed_chunks"][cid] = digest
+            meta[MetaKeys.PROCESSED_CHUNKS][cid] = digest
         # 删除记录与新图同一快照提交（复用发布路径，版本号保持不变语义）；
         # 清理中断后仍屏蔽旧分块，并在启动时重试。
         self._publish_snapshot(extractions, meta)
@@ -99,11 +100,11 @@ class RagService:
         保证随发布单调递增（payload 捕获时的版本可能落后于上一拍发布）。
         """
         with self._lock:
-            meta["graph_version"] = self.store.meta.get("graph_version", 0)
+            meta[MetaKeys.GRAPH_VERSION] = self.store.meta.get(MetaKeys.GRAPH_VERSION, 0)
         snapshot = GraphStore()
         snapshot.meta = meta
         snapshot.rebuild(extractions)
-        snapshot.meta["built_at"] = time.strftime("%Y-%m-%d %H:%M:%S")
+        snapshot.meta[MetaKeys.BUILT_AT] = time.strftime("%Y-%m-%d %H:%M:%S")
         snapshot.save()
         with self._lock:
             self.store.G = snapshot.G
@@ -167,7 +168,7 @@ class RagService:
             "subgraph": store.subgraph_viz(subgraph, edges),
             "node_count": subgraph.number_of_nodes(),
             "edge_count": len(edges),
-            "graph_version": store.meta.get("graph_version", 0),
+            MetaKeys.GRAPH_VERSION: store.meta.get(MetaKeys.GRAPH_VERSION, 0),
         }
 
 

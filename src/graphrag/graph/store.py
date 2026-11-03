@@ -7,15 +7,16 @@ import networkx as nx
 
 from graphrag.config import settings
 from graphrag.graph.entity_resolver import EntityResolver, normalize
+from graphrag.graph.meta import MetaKeys
 from graphrag.graph.persistence import export_graphml, load_graph, load_meta, save_graph, save_meta
 from graphrag.schemas.extraction import ChunkExtraction, Entity, Relation
 
 DEFAULT_META = {
-    "alias_map": {},
-    "processed_chunks": {},
-    "built_at": None,
-    "stats": {},
-    "graph_version": 0,
+    MetaKeys.ALIAS_MAP: {},
+    MetaKeys.PROCESSED_CHUNKS: {},
+    MetaKeys.BUILT_AT: None,
+    MetaKeys.STATS: {},
+    MetaKeys.GRAPH_VERSION: 0,
 }
 
 logger = logging.getLogger(__name__)
@@ -25,7 +26,7 @@ class GraphStore:
     def __init__(self, graph: nx.MultiDiGraph | None = None, alias_map: dict[str, str] | None = None):
         self.G = graph if graph is not None else nx.MultiDiGraph()
         self.resolver = EntityResolver(alias_map)
-        self.meta = {**deepcopy(DEFAULT_META), "alias_map": dict(alias_map or {})}
+        self.meta = {**deepcopy(DEFAULT_META), MetaKeys.ALIAS_MAP: dict(alias_map or {})}
         self._extractions: dict[str, ChunkExtraction] = {}
         self._key_names: dict[str, str] = {}
 
@@ -42,20 +43,20 @@ class GraphStore:
         if meta is None:
             meta = load_meta(settings.graph_meta_file)
         self.meta = {**deepcopy(DEFAULT_META), **meta}
-        self.resolver = EntityResolver(self.meta.get("alias_map", {}))
+        self.resolver = EntityResolver(self.meta.get(MetaKeys.ALIAS_MAP, {}))
         self._extractions = {}
         if extraction_loader is None:
             return
-        fingerprint = self.meta.get("extraction_fingerprint", "")
-        for cid, digest in self.meta.get("processed_chunks", {}).items():
+        fingerprint = self.meta.get(MetaKeys.EXTRACTION_FINGERPRINT, "")
+        for cid, digest in self.meta.get(MetaKeys.PROCESSED_CHUNKS, {}).items():
             ext = extraction_loader(cid, digest, fingerprint)
             if ext is not None:
                 self._extractions[cid] = ext
 
     def save(self) -> None:
-        meta = {**self.meta, "alias_map": self.resolver.to_dict(),
-                "graph_version": self.meta.get("graph_version", 0) + 1}
-        meta["stats"] = {**self.stats(), "graph_version": meta["graph_version"]}
+        meta = {**self.meta, MetaKeys.ALIAS_MAP: self.resolver.to_dict(),
+                MetaKeys.GRAPH_VERSION: self.meta.get(MetaKeys.GRAPH_VERSION, 0) + 1}
+        meta[MetaKeys.STATS] = {**self.stats(), MetaKeys.GRAPH_VERSION: meta[MetaKeys.GRAPH_VERSION]}
         # 图和成功处理记录同一快照原子提交，meta.json 仅兼容旧工具。
         save_graph(self.G, settings.graph_file, meta)
         self.meta = meta
@@ -160,8 +161,8 @@ class GraphStore:
             "edges": self.G.number_of_edges(),
             "node_types": node_types,
             "edge_relations": edge_relations,
-            "built_at": self.meta.get("built_at"),
-            "graph_version": self.meta.get("graph_version", 0),
+            MetaKeys.BUILT_AT: self.meta.get(MetaKeys.BUILT_AT),
+            MetaKeys.GRAPH_VERSION: self.meta.get(MetaKeys.GRAPH_VERSION, 0),
         }
 
     def to_viz_data(self, limit: int = 300) -> dict:
@@ -190,8 +191,8 @@ class GraphStore:
             for u, v, key, data in islice(edges, limit * 3)
         ]
         stats = self.stats()
-        return {"nodes": nodes, "links": links, "stats": stats,
-                "graph_version": stats["graph_version"],
+        return {"nodes": nodes, "links": links, MetaKeys.STATS: stats,
+                MetaKeys.GRAPH_VERSION: stats[MetaKeys.GRAPH_VERSION],
                 "truncated": stats["nodes"] > len(nodes) or stats["edges"] > len(links)}
 
     def subgraph_viz(self, subgraph: nx.MultiDiGraph, edges: list) -> dict:
