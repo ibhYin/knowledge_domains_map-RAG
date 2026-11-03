@@ -100,6 +100,23 @@ class RagService:
 
     # ---------- build ----------
 
+    def _publish_snapshot(self, extractions: dict, meta: dict) -> None:
+        """发布线程体：全量重放抽取、落盘、原子换图。
+
+        由单线程执行器串行调用，graph_version 随发布单调递增；
+        meta 是提交时的深拷贝，重放与序列化期间收割循环可继续推进。
+        """
+        snapshot = GraphStore()
+        snapshot.meta = meta
+        snapshot.rebuild(extractions)
+        snapshot.meta["built_at"] = time.strftime("%Y-%m-%d %H:%M:%S")
+        snapshot.save()
+        with self._lock:
+            self.store.G = snapshot.G
+            self.store.resolver = snapshot.resolver
+            self.store.meta = snapshot.meta
+            self.store._extractions = snapshot._extractions
+
     def build_graph(
         self,
         doc_ids: list[str] | None = None,
@@ -140,20 +157,24 @@ class RagService:
             progress({"status": "running", "processed": 0, "total": total, "failed": 0,
                       "graph_version": self.store.meta.get("graph_version", 0), "error": None})
 
-        # ponytail: 小语料按批次复制整图保存检查点；大图时改用事务存储。
-        working_store = deepcopy(self.store) if todo else None
+        # 工作副本只携带 meta（processed_chunks 等），图由发布线程全量重放生成，
+        # 不再 deepcopy 整图；发布成本集中在重建与序列化，见 _publish_snapshot。
+        working_store = GraphStore() if todo else None
         extractions = dict(self.store._extractions)
         if working_store is not None:
             if reset:
                 extractions = {}
-                version = working_store.meta.get("graph_version", 0)
-                working_store.clear()
-                working_store.meta["processed_chunks"] = {}
-                working_store.meta["graph_version"] = version
+                working_store.meta["graph_version"] = self.store.meta.get("graph_version", 0)
                 working_store.meta["deleted_documents"] = sorted(deleted)
+            else:
+                working_store.meta = deepcopy(self.store.meta)
             working_store.meta["extraction_fingerprint"] = fingerprint
         saved_success_count = 0
         checkpoint_processed = 0
+        done = 0
+        failed = 0
+        # 大语料自适应：按总量把发布会次数限制在约 50 次以内，小语料维持原间隔。
+        checkpoint_interval = max(settings.build_checkpoint_interval, (total + 49) // 50)
 
         # 所有 worker 共享同一 extractor：复用 ChatOpenAI/httpx 连接池，避免每分块重复握手。
         extractor = EntityExtractor(config=config)
@@ -171,54 +192,63 @@ class RagService:
                     self.chunks.save_extraction(cid, h, fingerprint, ext)
             return cid, h, ext
 
-        with ThreadPoolExecutor(max_workers=settings.extraction_concurrency) as pool:
-            pending = {pool.submit(extract_task, item) for item in todo}
-            done = 0
-            failed = 0
-            last_published = time.monotonic()
-            while pending:
-                finished, pending = wait(pending, timeout=min(1.0, settings.build_publish_interval),
-                                         return_when=FIRST_COMPLETED)
-                for future in finished:
-                    cid, h, ext = future.result()
-                    if ext is not None:
-                        extractions[cid] = ext
-                        working_store.meta.setdefault("processed_chunks", {})[cid] = h
-                    else:
-                        failed += 1
-                    done += 1
-                published = False
-                if done - failed > saved_success_count and (
-                    saved_success_count == 0
-                    or done - failed - saved_success_count >= settings.build_checkpoint_interval
-                    or time.monotonic() - last_published >= settings.build_publish_interval
-                    or not pending
-                ):
-                    # ponytail: 每次发布 O(已完成分块) 重放以消除别名顺序影响；大图再做增量索引。
-                    snapshot = deepcopy(working_store)
-                    snapshot.rebuild(extractions)
-                    snapshot.meta["built_at"] = time.strftime("%Y-%m-%d %H:%M:%S")
-                    snapshot.save()
-                    with self._lock:
-                        self.store.G = snapshot.G
-                        self.store.resolver = snapshot.resolver
-                        self.store.meta = snapshot.meta
-                        self.store._extractions = snapshot._extractions
-                    working_store.meta["graph_version"] = snapshot.meta["graph_version"]
-                    working_store.G = snapshot.G
-                    saved_success_count = done - failed
-                    checkpoint_processed = done
-                    last_published = time.monotonic()
-                    published = True
-                if progress and (finished or published):
-                    progress({
-                        "status": "running", "processed": done, "total": total,
-                        "failed": failed, "error": None,
-                        "nodes": working_store.G.number_of_nodes(),
-                        "edges": working_store.G.number_of_edges(),
-                        "checkpoint_processed": checkpoint_processed,
-                        "graph_version": self.store.meta.get("graph_version", 0),
-                    })
+        publisher = ThreadPoolExecutor(max_workers=1, thread_name_prefix="graph-publish")
+        publish_future = None
+        try:
+            with ThreadPoolExecutor(max_workers=settings.extraction_concurrency) as pool:
+                pending = {pool.submit(extract_task, item) for item in todo}
+                last_published = time.monotonic()
+                while pending:
+                    finished, pending = wait(pending, timeout=min(1.0, settings.build_publish_interval),
+                                             return_when=FIRST_COMPLETED)
+                    for future in finished:
+                        cid, h, ext = future.result()
+                        if ext is not None:
+                            extractions[cid] = ext
+                            working_store.meta.setdefault("processed_chunks", {})[cid] = h
+                        else:
+                            failed += 1
+                        done += 1
+                    published = False
+                    if done - failed > saved_success_count and (
+                        saved_success_count == 0
+                        or done - failed - saved_success_count >= checkpoint_interval
+                        or time.monotonic() - last_published >= settings.build_publish_interval
+                        or not pending
+                    ) and (publish_future is None or publish_future.done()):
+                        # 发布在后台单线程串行执行（全量重放+落盘+换图），收割循环不再被阻塞；
+                        # 上一次未完成时跳过，条件持续满足会在下一轮补发最新状态。
+                        publish_future = publisher.submit(
+                            self._publish_snapshot, dict(extractions), deepcopy(working_store.meta))
+                        saved_success_count = done - failed
+                        checkpoint_processed = done
+                        last_published = time.monotonic()
+                        published = True
+                    if publish_future is not None and publish_future.done():
+                        exc = publish_future.exception()
+                        if exc is not None:
+                            raise exc
+                    if progress and (finished or published):
+                        with self._lock:
+                            nodes = self.store.G.number_of_nodes()
+                            edges = self.store.G.number_of_edges()
+                            version = self.store.meta.get("graph_version", 0)
+                        progress({
+                            "status": "running", "processed": done, "total": total,
+                            "failed": failed, "error": None,
+                            "nodes": nodes,
+                            "edges": edges,
+                            "checkpoint_processed": checkpoint_processed,
+                            "graph_version": version,
+                        })
+            # 收尾发布：最后一批若因上次发布进行中被跳过，在此补发。
+            if todo and done - failed > saved_success_count:
+                publish_future = publisher.submit(
+                    self._publish_snapshot, dict(extractions), deepcopy(working_store.meta))
+            if publish_future is not None:
+                publish_future.result()
+        finally:
+            publisher.shutdown(wait=True)
 
         error = None
         if total and failed == total:
