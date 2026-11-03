@@ -163,11 +163,13 @@ class QueryEntityExtractor:
     def extract(self, question: str) -> list:
         chain = self._get_chain()
         last_error: Exception | None = None
+        message = "问题实体识别失败，请稍后重试。"
         for attempt in (1, 2):
             try:
                 result = chain.invoke({"text": question})
             except (APIError, OutputParserException) as exc:
                 last_error = exc
+                message = "问题实体识别服务调用失败，请稍后重试。"
                 continue
             parsed = result.get("parsed") if isinstance(result, dict) else result
             if parsed is None:
@@ -177,5 +179,6 @@ class QueryEntityExtractor:
                 return QueryEntities.model_validate(parsed).entities
             except ValidationError as exc:
                 last_error = exc
+                message = "问题实体识别结果格式错误，请重试。"
         logger.warning("问题实体抽取两次尝试均失败")
-        raise QueryExtractionError("问题实体识别失败，请稍后重试。") from last_error
+        raise QueryExtractionError(message) from last_error
