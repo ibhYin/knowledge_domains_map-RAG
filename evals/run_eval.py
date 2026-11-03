@@ -109,6 +109,7 @@ def main() -> None:
         items = items[:args.limit]
     print(f"评测集 {args.dataset}：{len(items)} 题，模式 {args.mode}\n")
 
+    service.load()  # 独立进程无 FastAPI lifespan，需显式加载图谱快照
     rows = []
     started = time.monotonic()
     for i, item in enumerate(items, 1):

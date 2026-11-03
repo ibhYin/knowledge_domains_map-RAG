@@ -113,9 +113,11 @@ def main() -> None:
     written = skipped = 0
     with out_path.open("w", encoding="utf-8") as out:
         for doc_id in docs:
-            records = sorted(by_doc[doc_id], key=lambda r: r["chunk_index"])[:args.per_doc]
+            records = sorted(by_doc[doc_id], key=lambda r: r["chunk_index"])
+            records = [r for r in records if len(r["content"]) >= 30][:args.per_doc]  # 跳过纯标题块
             for i, record in enumerate(records):
-                qtype = QTYPE_ROTATION[i % len(QTYPE_ROTATION)]
+                # 全局轮换：per-doc 较小时按文档内下标轮换只会命中前两种题型
+                qtype = QTYPE_ROTATION[(written + i) % len(QTYPE_ROTATION)]
                 cid = chunk_id_of(doc_id, record["chunk_index"])
                 item = generate_one(llm, qtype, record["content"])
                 if item is None:
