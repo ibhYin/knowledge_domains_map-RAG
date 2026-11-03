@@ -27,6 +27,7 @@ class GraphStore:
         self.resolver = EntityResolver(alias_map)
         self.meta = {**deepcopy(DEFAULT_META), "alias_map": dict(alias_map or {})}
         self._extractions: dict[str, ChunkExtraction] = {}
+        self._key_names: dict[str, str] = {}
 
     # ---------- 持久化 ----------
 
@@ -60,6 +61,7 @@ class GraphStore:
         self.resolver = EntityResolver()
         self.meta = deepcopy(DEFAULT_META)
         self._extractions = {}
+        self._key_names = {}
 
     # ---------- 构建 ----------
 
@@ -89,11 +91,20 @@ class GraphStore:
         self.add_extraction(ext, chunk_id)
         return self.resolver.entity_key(ent.name, ent.type.value)
 
+    def _key_name(self, key: str) -> str:
+        """实体 key 是类型与规范名组成的 JSON 字符串；缓存解析结果，避免热路径反复 json.loads。"""
+        name = self._key_names.get(key)
+        if name is None:
+            name = json.loads(key)[1]
+            self._key_names[key] = name
+        return name
+
     def _merge_entity(self, ent: Entity, chunk_id: str) -> str:
         key = self.resolver.entity_key(ent.name, ent.type.value)
         if key in self.G:
             n = self.G.nodes[key]
-            if normalize_str(n["name"]) != json.loads(key)[1] and normalize_str(ent.name) == json.loads(key)[1]:
+            canonical = self._key_name(key)
+            if normalize_str(n["name"]) != canonical and normalize_str(ent.name) == canonical:
                 n["name"] = ent.name
             if chunk_id not in n["source_chunks"]:
                 n["source_chunks"].append(chunk_id)
