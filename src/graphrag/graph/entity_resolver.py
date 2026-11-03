@@ -1,3 +1,4 @@
+import json
 import re
 import unicodedata
 
@@ -50,4 +51,3 @@ class EntityResolver:
 
     def to_dict(self) -> dict[str, str]:
         return dict(self.alias_map)
-import json
