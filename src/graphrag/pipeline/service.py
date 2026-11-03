@@ -48,11 +48,9 @@ class RagService:
         if doc_id not in {d["doc_id"] for d in self.list_documents()}:
             return False
         deleted = set(self.store.meta.get("deleted_documents", [])) | {doc_id}
-        snapshot = GraphStore()
-        snapshot.meta["processed_chunks"] = {}
-        snapshot.meta["graph_version"] = self.store.meta.get("graph_version", 0)
         fingerprint = self.store.meta.get("extraction_fingerprint", "")
-        snapshot.meta["extraction_fingerprint"] = fingerprint
+        meta = {"extraction_fingerprint": fingerprint, "deleted_documents": sorted(deleted),
+                "processed_chunks": {}}
         extractions = {}
         # ponytail: 删除时 O(全部剩余分块) 本地重放；规模触顶后再做增量撤销。
         for record in self.chunks.iter_chunks():
@@ -67,15 +65,10 @@ class RagService:
                     raise ValueError("剩余文档缺少有效抽取缓存，无法安全删除，请先重新构建。")
                 continue
             extractions[cid] = ext
-            snapshot.meta["processed_chunks"][cid] = digest
-        snapshot.rebuild(extractions)
-        snapshot.meta["built_at"] = time.strftime("%Y-%m-%d %H:%M:%S")
-        # 删除记录与新图同一文件提交；清理中断后仍屏蔽旧分块，并在启动时重试。
-        snapshot.meta["deleted_documents"] = sorted(deleted)
-        snapshot.save()
-        with self._lock:
-            self.store.G, self.store.resolver, self.store.meta = snapshot.G, snapshot.resolver, snapshot.meta
-            self.store._extractions = snapshot._extractions
+            meta["processed_chunks"][cid] = digest
+        # 删除记录与新图同一快照提交（复用发布路径，版本号保持不变语义）；
+        # 清理中断后仍屏蔽旧分块，并在启动时重试。
+        self._publish_snapshot(extractions, meta)
         self._finish_deletions()
         return True
 
