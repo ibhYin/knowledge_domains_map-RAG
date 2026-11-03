@@ -12,7 +12,7 @@ from graphrag.api.history import HistoryStore
 from graphrag.graph.meta import MetaKeys
 from graphrag.api.jobs import JobConflict, JobManager
 from graphrag.config import fresh_llm_config, settings, write_env
-from graphrag.llm.extractor import QueryExtractionError
+from graphrag.llm.extractor import LLMInvocationError
 from graphrag.pipeline.service import service
 from graphrag.schemas.api import BuildRequest, QueryRequest
 
@@ -255,7 +255,7 @@ def query(body: QueryRequest):
             max_edges=body.max_edges,
             seed_override=body.seed_override,
         )
-    except QueryExtractionError as exc:
+    except LLMInvocationError as exc:
         raise HTTPException(status_code=502, detail=str(exc)) from exc
     history_store.append({
         "question": body.question,

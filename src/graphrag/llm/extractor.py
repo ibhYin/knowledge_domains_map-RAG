@@ -76,8 +76,11 @@ QUERY_EXTRACTION_PROMPT = """你是实体识别助手。从用户问题中抽取
 若实体类型不确定，type 填 null。"""
 
 
-class QueryExtractionError(RuntimeError):
-    """问题抽取的模型调用或输出解析失败。"""
+class LLMInvocationError(RuntimeError):
+    """模型调用或输出解析失败（种子抽取 / 答案生成 / 证据审核共用）。"""
+
+
+QueryExtractionError = LLMInvocationError  # 兼容别名：既有测试与外部引用沿用旧名
 
 
 def _parse_raw_json(raw: object) -> Optional[dict]:
@@ -181,4 +184,4 @@ class QueryEntityExtractor:
                 last_error = exc
                 message = "问题实体识别结果格式错误，请重试。"
         logger.warning("问题实体抽取两次尝试均失败")
-        raise QueryExtractionError(message) from last_error
+        raise LLMInvocationError(message) from last_error

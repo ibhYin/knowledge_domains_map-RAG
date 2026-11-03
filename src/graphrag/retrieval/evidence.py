@@ -5,7 +5,7 @@ from langchain_core.messages import HumanMessage, SystemMessage
 from openai import APIError
 from pydantic import BaseModel, Field, ValidationError
 
-from graphrag.llm.extractor import QueryExtractionError, _parse_raw_json
+from graphrag.llm.extractor import LLMInvocationError, _parse_raw_json
 from graphrag.pipeline.chunk_store import chunk_id_of
 
 
@@ -52,7 +52,7 @@ def _invoke_json(llm, instruction: str, data: dict, schema):
             return schema.model_validate(_parse_raw_json(result.content))
         except (APIError, ValidationError) as exc:
             last_exc = exc
-    raise QueryExtractionError("回答或证据校验失败，请稍后重试。") from last_exc
+    raise LLMInvocationError("回答或证据校验失败，请稍后重试。") from last_exc
 
 
 def answer_with_evidence(llm, question: str, context: str, sources: list[dict]) -> dict:
