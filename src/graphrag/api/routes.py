@@ -8,6 +8,7 @@ from typing import Optional
 
 import httpx
 from fastapi import APIRouter, HTTPException, Query, UploadFile
+from fastapi.concurrency import run_in_threadpool
 from fastapi.responses import PlainTextResponse
 
 from graphrag.config import fresh_llm_config, settings, write_env
@@ -101,9 +102,14 @@ async def ingest_documents(files: list[UploadFile]):
     for f in files:
         content = await f.read()
         results.append((f.filename or "unnamed", content))
-    try:
+
+    def _do_ingest():
         with _jobs_lock:
             return {"ingested": service.ingest(results)}
+
+    try:
+        # PDF/DOCX 解析与落盘是同步重活，移入线程池执行，上传期间事件循环不再冻结。
+        return await run_in_threadpool(_do_ingest)
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
 
