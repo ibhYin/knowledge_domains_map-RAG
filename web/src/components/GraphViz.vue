@@ -33,6 +33,28 @@ const RELATION_CN = {
   INVENTED_BY: '发明者', PARTNERS_WITH: '合作', USES: '使用', IN_PERIOD: '时间归属',
 }
 
+// 读取当前力导向布局的节点坐标（按原始数据项 id 映射），供增量刷新时保留布局。
+// 依赖 echarts 内部 API，任何异常都回退为全量重布局。
+function readLayoutPositions() {
+  try {
+    const series = chart.getModel().getSeriesByIndex(0)
+    const data = series && series.getData()
+    if (!data || typeof data.getItemLayout !== 'function' || typeof data.getRawDataItem !== 'function') return null
+    const positions = new Map()
+    const count = data.count()
+    for (let i = 0; i < count; i++) {
+      const layout = data.getItemLayout(i)
+      const raw = data.getRawDataItem(i)
+      if (layout && raw && Number.isFinite(layout.x) && Number.isFinite(layout.y)) {
+        positions.set(raw.id, { x: layout.x, y: layout.y })
+      }
+    }
+    return positions.size ? positions : null
+  } catch {
+    return null
+  }
+}
+
 function render(selected = selectedId) {
   if (!chart) return
   if (!props.nodes.length) {
@@ -42,6 +64,7 @@ function render(selected = selectedId) {
   }
   selected = props.nodes.some((n) => n.id === selected) ? selected : null
   selectedId = selected
+  const previousPositions = readLayoutPositions()
   const neighborIds = new Set()
   if (selected) {
     for (const l of props.links) {
@@ -50,9 +73,14 @@ function render(selected = selectedId) {
     }
   }
   const categoryById = {}
+  let jitterSeed = 0
+  const randomNear = (center, spread) => {
+    jitterSeed = (jitterSeed + 1) % 97
+    return center + (jitterSeed / 97 - 0.5) * spread * 2
+  }
   const nodeData = props.nodes.map((n) => {
     categoryById[n.id] = n.type || 'UNKNOWN'
-    return {
+    const item = {
       id: n.id,
       name: n.name,
       value: n.mention_count || 0,
@@ -70,7 +98,35 @@ function render(selected = selectedId) {
         },
       },
     }
+    return item
   })
+
+  // 已有节点沿用当前布局坐标，新增节点在质心附近落点：数据刷新不触发全图重排。
+  let initLayout
+  if (previousPositions) {
+    let sx = 0
+    let sy = 0
+    for (const p of previousPositions.values()) {
+      sx += p.x
+      sy += p.y
+    }
+    const cx = sx / previousPositions.size
+    const cy = sy / previousPositions.size
+    let missing = 0
+    for (const item of nodeData) {
+      const pos = previousPositions.get(item.id)
+      if (pos) {
+        item.x = pos.x
+        item.y = pos.y
+      } else {
+        item.x = randomNear(cx, 120)
+        item.y = randomNear(cy, 120)
+        missing += 1
+      }
+    }
+    initLayout = 'none'
+    if (missing === nodeData.length) initLayout = undefined // 全新数据仍走默认布局
+  }
   const linkData = props.links.map((l) => {
     const active = selected ? l.source === selected || l.target === selected || (neighborIds.has(l.source) && neighborIds.has(l.target)) : true
     return {
@@ -118,7 +174,14 @@ function render(selected = selectedId) {
           categories,
           roam: true,
           draggable: true,
-          force: { repulsion: 220, edgeLength: [60, 160], gravity: 0.1 },
+          force: {
+            repulsion: 220,
+            edgeLength: [60, 160],
+            gravity: 0.1,
+            ...(initLayout ? { initLayout } : {}),
+          },
+          // 重叠标签自动隐藏：900 条边标签常驻渲染是最大绘制开销
+          labelLayout: { hideOverlap: true },
           emphasis: { focus: 'adjacency', label: { fontSize: 14 } },
           lineStyle: { color: 'source' },
         },
