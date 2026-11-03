@@ -43,12 +43,16 @@ def collect_sources(documents: list[dict], records: list[dict], subgraph, edges:
 
 
 def _invoke_json(llm, instruction: str, data: dict, schema):
-    try:
-        result = llm.invoke([SystemMessage(content=instruction),
-                             HumanMessage(content=json.dumps(data, ensure_ascii=False))])
-        return schema.model_validate(_parse_raw_json(result.content))
-    except (APIError, ValidationError) as exc:
-        raise QueryExtractionError("回答或证据校验失败，请稍后重试。") from exc
+    # 解析失败应用层重试一次：模型偶发输出不合法 JSON 时，避免已花费的前序调用全部作废。
+    last_exc: Exception | None = None
+    for _ in range(2):
+        try:
+            result = llm.invoke([SystemMessage(content=instruction),
+                                 HumanMessage(content=json.dumps(data, ensure_ascii=False))])
+            return schema.model_validate(_parse_raw_json(result.content))
+        except (APIError, ValidationError) as exc:
+            last_exc = exc
+    raise QueryExtractionError("回答或证据校验失败，请稍后重试。") from last_exc
 
 
 def answer_with_evidence(llm, question: str, context: str, sources: list[dict]) -> dict:

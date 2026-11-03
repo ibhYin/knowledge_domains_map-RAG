@@ -121,21 +121,24 @@ class EntityExtractor:
 
     def extract(self, text: str) -> Optional[ChunkExtraction]:
         chain = self._get_chain()
-        try:
-            result = chain.invoke({"text": text})
-        except (APIError, OutputParserException) as exc:
-            logger.warning("实体抽取调用失败: %s", type(exc).__name__)
-            return None
-        # with_structured_output include_raw=True 返回 {"raw":..., "parsed":...}
-        parsed = result.get("parsed") if isinstance(result, dict) else result
-        if parsed is None:
-            raw = getattr(result.get("raw"), "content", None) if isinstance(result, dict) else None
-            parsed = _parse_raw_json(raw)
-        try:
-            return ChunkExtraction.model_validate(parsed)
-        except ValidationError:
-            logger.warning("实体抽取输出无法解析或不符合实体关系结构，跳过该片段")
-            return None
+        last_warning = ""
+        for attempt in (1, 2):
+            try:
+                result = chain.invoke({"text": text})
+            except (APIError, OutputParserException) as exc:
+                last_warning = f"实体抽取调用失败(第{attempt}次): {type(exc).__name__}"
+                continue
+            # with_structured_output include_raw=True 返回 {"raw":..., "parsed":...}
+            parsed = result.get("parsed") if isinstance(result, dict) else result
+            if parsed is None:
+                raw = getattr(result.get("raw"), "content", None) if isinstance(result, dict) else None
+                parsed = _parse_raw_json(raw)
+            try:
+                return ChunkExtraction.model_validate(parsed)
+            except ValidationError:
+                last_warning = f"实体抽取输出无法解析(第{attempt}次)"
+        logger.warning("%s，跳过该片段", last_warning)
+        return None
 
 
 class QueryEntityExtractor:
@@ -159,17 +162,20 @@ class QueryEntityExtractor:
 
     def extract(self, question: str) -> list:
         chain = self._get_chain()
-        try:
-            result = chain.invoke({"text": question})
-        except (APIError, OutputParserException) as exc:
-            logger.warning("问题实体抽取调用失败: %s", type(exc).__name__)
-            raise QueryExtractionError("问题实体识别服务调用失败，请稍后重试。") from exc
-        parsed = result.get("parsed") if isinstance(result, dict) else result
-        if parsed is None:
-            raw = getattr(result.get("raw"), "content", None) if isinstance(result, dict) else None
-            parsed = _parse_raw_json(raw)
-        try:
-            return QueryEntities.model_validate(parsed).entities
-        except ValidationError as exc:
-            logger.warning("问题实体抽取输出无法解析或不符合实体结构")
-            raise QueryExtractionError("问题实体识别结果格式错误，请重试。") from exc
+        last_error: Exception | None = None
+        for attempt in (1, 2):
+            try:
+                result = chain.invoke({"text": question})
+            except (APIError, OutputParserException) as exc:
+                last_error = exc
+                continue
+            parsed = result.get("parsed") if isinstance(result, dict) else result
+            if parsed is None:
+                raw = getattr(result.get("raw"), "content", None) if isinstance(result, dict) else None
+                parsed = _parse_raw_json(raw)
+            try:
+                return QueryEntities.model_validate(parsed).entities
+            except ValidationError as exc:
+                last_error = exc
+        logger.warning("问题实体抽取两次尝试均失败")
+        raise QueryExtractionError("问题实体识别失败，请稍后重试。") from last_error
