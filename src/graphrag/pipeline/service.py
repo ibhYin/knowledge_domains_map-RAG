@@ -155,11 +155,18 @@ class RagService:
         saved_success_count = 0
         checkpoint_processed = 0
 
+        # 所有 worker 共享同一 extractor：复用 ChatOpenAI/httpx 连接池，避免每分块重复握手。
+        extractor = EntityExtractor(config=config)
+        try:
+            extractor._get_chain()
+        except Exception as exc:  # noqa: BLE001
+            raise RuntimeError(f"模型配置不可用，请检查「模型设置」: {type(exc).__name__}") from exc
+
         def extract_task(item):
             cid, text, h = item
             ext = self.chunks.load_extraction(cid, h, fingerprint)
             if ext is None:
-                ext = EntityExtractor(config=config).extract(text)
+                ext = extractor.extract(text)
                 if ext is not None:
                     self.chunks.save_extraction(cid, h, fingerprint, ext)
             return cid, h, ext
