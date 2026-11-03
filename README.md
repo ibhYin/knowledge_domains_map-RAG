@@ -141,6 +141,47 @@ https://ark.cn-beijing.volces.com/api/coding/v3
 
 整批建图前，可先运行 `python docs/smoke_extract.py`：使用内置短文本，正常通过四次真实模型调用检查文档抽取、问题实体抽取、逐句引用和证据审核，同时验证缓存重建、删除、重启及 GraphML 导出。检查使用临时目录，不修改原有文档或图谱；需要先安装项目依赖并配置模型。
 
+## 评测
+
+内置可复现的评测工具链（语料拉取 → 金标/合成集 → 运行器 → 报告），报告输出到 `data/evals/report_*.json`：
+
+- `evals/fetch_corpus.py`：从中文维基镜像（hf-mirror）拉取 50 篇文档入库并建图，预览缓存 `data/cache/corpus_preview/`，索引 `data/evals/corpus_index.json`（event/geo/general/org/person/tech 六类）。
+- `evals/gold/wiki_gold.jsonl`：**手工金标 20 题**（六类覆盖 × 单跳事实/实体关系/时间/否定边界四题型），每题 gold_quotes 逐字摘自分块原文，`evals/gold/build_gold.py` 内置逐字校验，写入前强制通过。
+- `evals/generate_qa.py`：从分块合成回归集 `data/evals/synthetic.jsonl`（57 题），quote 必须是分块逐字子串（防循环引用），自动跳过纯标题块。
+- `evals/run_eval.py`：评测运行器，逐题调用 `service.answer` 并输出来源召回率 / 引用正确率 / 忠实度 / 逐字引用校验通过率 / 否定题诚实拒答率 / 种子定位率与延迟 p50/p95。
+
+### 基准数字
+
+图谱 6927 节点 / 8462 边（50 篇中文维基语料，模型 deepseek-v4-flash，2026-11-04）：
+
+| 指标 | 金标 20 题 seed | 金标 20 题 full | 合成 50 题 full |
+|---|---|---|---|
+| 来源召回率 | 93.8% | 68.8% | 78.0% |
+| 引用正确率 | 39.6% | 12.5% | 46.0% |
+| 忠实度（verified 比例） | 40.0% | 15.0% | 54.0% |
+| 逐字引用校验通过率 | 55.0% | 85.0% | 42.0% |
+| 否定题诚实拒答率 | 100%（4/4） | 100%（4/4） | — |
+| 种子定位率 | — | 75.0% | 80.0% |
+| 延迟 p50 / p95 | 15.3s / 74.6s | 14.9s / 69.0s | 19.3s / 230.1s |
+
+指标口径：来源召回率 = 金标分块被检索到的比例；引用正确率 = 被引分块属于金标的比例（拒答题计 0）；忠实度 = 回答通过句级证据审核的比例（证据不足拒答不计入通过）；种子定位率 = 问题实体在图中命中的比例（仅 full 模式）。
+
+### 复现
+
+```bash
+PYTHONPATH=src python evals/generate_qa.py                                          # 合成集
+PYTHONPATH=src python evals/run_eval.py evals/gold/wiki_gold.jsonl --mode seed      # 金标 seed
+PYTHONPATH=src python evals/run_eval.py evals/gold/wiki_gold.jsonl --mode full      # 金标 full
+PYTHONPATH=src python evals/run_eval.py data/evals/synthetic.jsonl --mode full --limit 50
+```
+
+### 评测暴露的两个主要瓶颈
+
+1. **查询实体定位（full 模式）**：问题实体抽取出的裸名（如「改革开放」「气象学」）在图中存在同名/含名多节点时，`locate()` 按歧义约定返回 None（避免错误落点），约 1/4 题目种子落空导致空检索。对照：人工给种子（seed 模式）召回 93.8%。改进方向是别名表收录裸名消歧或在定位失败时回退到分块词检索。
+2. **来源排序与上下文窗口**：2 跳图扩张召回可达 170 块，金标分块常排在 100+ 位，而答案生成只取前 40 块——证据「在库不在窗」，系统按设计诚实拒答（否定题拒答率 100%、全程零误答），但可用性受损。来源重排序 / 上下文压缩是下一优先级。
+
+防幻觉链路得到验证：逐字引用校验 + 句级证据审核 + 否定边界诚实拒答在 70 题上无一硬编。
+
 ## 说明与限制
 
 - 新回答按事实句附带分块引用，可展开证据片段和完整原文。实际引用与检索到但未引用的材料分开展示，实体描述来源也会收集。

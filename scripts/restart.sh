@@ -122,4 +122,4 @@ if [ -z "$pid" ]; then
   tail -20 data/logs/backend.log 2>/dev/null
   exit 1
 fi
-log "✅ 后端已重启：PID $pid，启动于 ${started:-未知}"
+log "✅ 后端已重启：PID ${pid}，启动于 ${started:-未知}"
