@@ -273,15 +273,35 @@ def save_settings(body: dict):
     return {"ok": True, "message": "配置已保存，新的 LLM 配置会在下次调用时生效"}
 
 
+_HISTORY_SUMMARY_FIELDS = ("question", "answer", "matched", "node_count", "edge_count",
+                           "verification", "used_docs", "ts")
+
+
 @router.get("/history")
-def history():
+def history(offset: int = Query(0, ge=0), limit: int = Query(20, ge=1, le=100)):
     with _history_lock:
         items = _load_history()
+    # 列表只回摘要（不含 context/subgraph/sentences/sources 等大字段），详情按需取。
+    ordered = list(enumerate(items))[::-1]
+    window = ordered[offset:offset + limit]
+    return {
+        "total": len(items),
+        "items": [{**{k: item.get(k) for k in _HISTORY_SUMMARY_FIELDS}, "index": index}
+                  for index, item in window],
+    }
+
+
+@router.get("/history/{index}")
+def history_detail(index: int):
+    with _history_lock:
+        items = _load_history()
+    if not 0 <= index < len(items):
+        raise HTTPException(status_code=404, detail="历史记录不存在")
+    item = items[index]
     active = {d["doc_id"] for d in service.list_documents()}
-    for item in items:
-        for source in [*(item.get("sources") or []), *(item.get("retrieved_sources") or [])]:
-            source["deleted"] = source["doc_id"] not in active
-    return {"history": list(reversed(items))}
+    for source in [*(item.get("sources") or []), *(item.get("retrieved_sources") or [])]:
+        source["deleted"] = source["doc_id"] not in active
+    return {**item, "index": index}
 
 
 @router.delete("/history")

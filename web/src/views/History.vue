@@ -9,21 +9,28 @@
       </div>
 
       <div v-if="items.length" class="history-list">
-        <div v-for="(h, i) in items" :key="i" class="history-item">
-          <button class="h-head" :aria-expanded="h.open" :aria-controls="`history-body-${i}`" @click="h.open = !h.open">
+        <div v-for="(h, i) in items" :key="h.index" class="history-item">
+          <button class="h-head" :aria-expanded="h.open" :aria-controls="`history-body-${i}`" @click="toggle(h)">
             <span class="h-q">{{ h.question }}</span>
             <span class="muted">{{ h.ts }} · {{ h.node_count }} 节点 / {{ h.edge_count }} 边</span>
             <svg :class="{ open: h.open }" class="chevron" viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="m6 9 6 6 6-6" /></svg>
           </button>
           <div v-if="h.open" :id="`history-body-${i}`" class="h-body">
-            <div v-if="h.matched?.length" class="meta">匹配实体：<span v-for="m in h.matched" :key="m" class="chip green">{{ m }}</span></div>
-            <CitedAnswer :answer="h.answer" :sentences="h.sentences || []" :sources="h.sources || []"
-              :retrieved-sources="h.retrieved_sources || []" :verification="h.verification || ''" />
-            <GraphViz v-if="h.subgraph?.nodes?.length" :nodes="h.subgraph.nodes" :links="h.subgraph.links" height="300px" />
+            <p v-if="!h.detail" class="muted">加载详情…</p>
+            <template v-else>
+              <div v-if="h.detail.matched?.length" class="meta">匹配实体：<span v-for="m in h.detail.matched" :key="m" class="chip green">{{ m }}</span></div>
+              <CitedAnswer :answer="h.detail.answer" :sentences="h.detail.sentences || []" :sources="h.detail.sources || []"
+                :retrieved-sources="h.detail.retrieved_sources || []" :verification="h.detail.verification || ''" />
+              <GraphViz v-if="h.detail.subgraph?.nodes?.length" :nodes="h.detail.subgraph.nodes" :links="h.detail.subgraph.links" height="300px" />
+            </template>
           </div>
         </div>
       </div>
       <p v-else class="empty">暂无问答记录。到「问答」页提问后会自动保存到这里。</p>
+
+      <div v-if="items.length < total" style="text-align:center;margin-top:12px">
+        <button class="btn btn-sm" @click="loadMore" :disabled="loadingMore">{{ loadingMore ? '加载中…' : '加载更多' }}</button>
+      </div>
     </div>
   </div>
 </template>
@@ -34,14 +41,42 @@ import { api } from '../api'
 import GraphViz from '../components/GraphViz.vue'
 import CitedAnswer from '../components/CitedAnswer.vue'
 
+const PAGE_SIZE = 20
 const items = ref([])
+const total = ref(0)
+const loadingMore = ref(false)
 
 async function refresh() {
   try {
-    const data = await api.history()
-    items.value = data.history.map((h) => ({ ...h, open: false }))
+    const data = await api.history(0, PAGE_SIZE)
+    total.value = data.total
+    items.value = data.items.map((h) => ({ ...h, open: false, detail: null }))
   } catch (e) {
     /* ignore */
+  }
+}
+
+async function toggle(h) {
+  h.open = !h.open
+  if (h.open && !h.detail) {
+    try {
+      h.detail = await api.historyDetail(h.index)
+    } catch (e) {
+      /* ignore */
+    }
+  }
+}
+
+async function loadMore() {
+  loadingMore.value = true
+  try {
+    const data = await api.history(items.value.length, PAGE_SIZE)
+    total.value = data.total
+    items.value.push(...data.items.map((h) => ({ ...h, open: false, detail: null })))
+  } catch (e) {
+    /* ignore */
+  } finally {
+    loadingMore.value = false
   }
 }
 
@@ -49,6 +84,7 @@ async function clearAll() {
   if (!confirm('确定清空全部问答历史？')) return
   await api.clearHistory()
   items.value = []
+  total.value = 0
 }
 
 onMounted(refresh)

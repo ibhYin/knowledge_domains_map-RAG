@@ -302,7 +302,12 @@ class ReviewChecks(unittest.TestCase):
         fake = SimpleNamespace(invoke=Mock(return_value=AIMessage(content='{"sentences":[]}')))
         self.assertEqual(answer_with_evidence(fake, "问题", "", sources)["verification"], "insufficient")
         fake.invoke.assert_called_once()
-        fake = SimpleNamespace(invoke=Mock(side_effect=[AIMessage(content=json.dumps(draft)), AIMessage(content="bad json")]))
+        fake = SimpleNamespace(invoke=Mock(side_effect=[AIMessage(content=json.dumps(draft)), AIMessage(content="bad json"),
+                                                        AIMessage(content=json.dumps({"supported": [0, 1]}))]))
+        retried = answer_with_evidence(fake, "问题", "", sources)
+        self.assertEqual(len(retried["sentences"]), 2)  # 校验输出损坏时自动重试一次
+        fake = SimpleNamespace(invoke=Mock(side_effect=[AIMessage(content=json.dumps(draft)), AIMessage(content="bad json"),
+                                                        AIMessage(content="bad json")]))
         with self.assertRaises(QueryExtractionError):
             answer_with_evidence(fake, "问题", "", sources)
 
@@ -321,7 +326,8 @@ class ReviewChecks(unittest.TestCase):
             response = client.post("/api/query", json={"question": "大学？", "seed_override": ["清华大学"]})
             self.assertEqual(response.status_code, 200)
             self.assertEqual(client.delete(f"/api/documents/{doc['doc_id']}").status_code, 200)
-            saved = client.get("/api/history").json()["history"][0]
+            listed = client.get("/api/history?limit=1").json()
+            saved = client.get(f"/api/history/{listed['items'][0]['index']}").json()
         self.assertTrue(saved["sources"][0]["deleted"])
         self.assertEqual(saved["sources"][0]["content"], "清华大学是一所大学。")
         self.assertEqual(saved["sentences"], response.json()["sentences"])
@@ -557,10 +563,14 @@ class ReviewChecks(unittest.TestCase):
              patch.object(EntityExtractor, "extract", return_value=ChunkExtraction()) as extract:
             service.build_graph()
             service.chunks._extraction_file("doc:0").write_text("{", encoding="utf-8")
-            service.build_graph()
-            service.build_graph()
+            service.build_graph()  # 同会话内有效内存缓存直接复用，不重复调模型
+            self.assertEqual(extract.call_count, 1)
+            restarted = RagService()
+            restarted.store.load()  # 重启后从磁盘加载：损坏文件校验失败视为缺失
+            with patch.object(restarted.chunks, "iter_chunks", return_value=[record]):
+                restarted.build_graph()
         self.assertEqual(extract.call_count, 2)
-        self.assertEqual(service.store.G.number_of_nodes(), 0)
+        self.assertEqual(restarted.store.G.number_of_nodes(), 0)
 
     def test_unexpected_build_error_does_not_publish_partial_results(self):
         service = RagService()
@@ -667,10 +677,6 @@ class ReviewChecks(unittest.TestCase):
         def progress(state):
             if state["processed"] == 1:
                 self.assertEqual(state["checkpoint_processed"], 1)
-                self.assertEqual(state["nodes"], 2)
-                restored = GraphStore()
-                restored.load()
-                self.assertEqual(len(restored.meta["processed_chunks"]), 1)
                 release.set()
 
         with patch.object(service.chunks, "iter_chunks", return_value=records), \
@@ -678,6 +684,11 @@ class ReviewChecks(unittest.TestCase):
              patch.object(EntityExtractor, "extract", side_effect=extract):
             with self.assertRaisesRegex(RuntimeError, "later failure"):
                 service.build_graph(progress=progress)
+        # 构建结束（含异常路径）时发布器已 join，首个检查点保证已落盘。
+        self.assertEqual(service.store.G.number_of_nodes(), 2)
+        restored = GraphStore()
+        restored.load()
+        self.assertEqual(len(restored.meta["processed_chunks"]), 1)
         resumed = RagService()
         resumed.store.load()
         with patch.object(resumed.chunks, "iter_chunks", return_value=records), \
@@ -692,7 +703,6 @@ class ReviewChecks(unittest.TestCase):
         release = threading.Event()
         records = [{"content": text, "chunk_index": i, "metadata": {"doc_id": "doc"}}
                    for i, text in enumerate(("first", "second"))]
-        published = []
 
         def extract(text):
             if text == "second":
@@ -700,19 +710,19 @@ class ReviewChecks(unittest.TestCase):
             return ChunkExtraction(entities=[entity(text)])
 
         def progress(state):
-            if state["processed"] == 1:
-                self.assertEqual(state["checkpoint_processed"], 1)
-                published.append(service.store.G)
-                self.assertEqual(published[0].number_of_nodes(), 1)
+            if state["processed"] == 1 and state.get("checkpoint_processed") == 1:
                 release.set()
 
         with patch.object(service.chunks, "iter_chunks", return_value=records), \
              patch.object(settings, "build_checkpoint_interval", 50), \
-             patch.object(EntityExtractor, "extract", side_effect=extract):
+             patch.object(EntityExtractor, "extract", side_effect=extract), \
+             patch.object(service, "_publish_snapshot", wraps=service._publish_snapshot) as publish:
             service.build_graph(progress=progress)
-        self.assertEqual(published[0].number_of_nodes(), 1)
+        # 发布后台化后以 payload 冻结点验证：首个发布只含当时已完成的结果，不受后续收割影响。
+        self.assertEqual(publish.call_count, 2)
+        self.assertEqual(len(publish.call_args_list[0].args[0]), 1)
+        self.assertEqual(len(publish.call_args_list[1].args[0]), 2)
         self.assertEqual(service.store.G.number_of_nodes(), 2)
-        self.assertIsNot(published[0], service.store.G)
 
     def test_snapshot_is_atomic_and_legacy_graph_can_load(self):
         store = GraphStore()

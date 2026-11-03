@@ -51,7 +51,8 @@ export const api = {
 
   // 问答与历史
   query: (payload) => postJSON('/api/query', payload),
-  history: () => request('/api/history'),
+  history: (offset = 0, limit = 20) => request(`/api/history?offset=${offset}&limit=${limit}`),
+  historyDetail: (index) => request(`/api/history/${index}`),
   clearHistory: () => request('/api/history', { method: 'DELETE' }),
 
   // 模型设置
