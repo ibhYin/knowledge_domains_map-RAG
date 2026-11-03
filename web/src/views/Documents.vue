@@ -47,7 +47,7 @@
 </template>
 
 <script setup>
-import { onMounted, ref } from 'vue'
+import { onActivated, ref } from 'vue'
 import { api } from '../api'
 
 const docs = ref([])
@@ -109,7 +109,7 @@ async function removeDoc(docId) {
   }
 }
 
-onMounted(refresh)
+onActivated(refresh)
 </script>
 
 <style scoped>

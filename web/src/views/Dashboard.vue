@@ -57,7 +57,7 @@
 </template>
 
 <script setup>
-import { computed, onMounted, ref } from 'vue'
+import { computed, onActivated, ref } from 'vue'
 import { api } from '../api'
 
 const ov = ref({})
@@ -82,7 +82,7 @@ function go(key) {
   emit('nav', key)
 }
 
-onMounted(async () => {
+onActivated(async () => {
   try {
     ov.value = await api.overview()
   } catch (e) {

@@ -63,7 +63,7 @@ onMounted(async () => {
         <template v-if="buildProgress.total">（{{ Math.round(buildProgress.processed / buildProgress.total * 100) }}%）</template>
         · {{ buildProgress.status === 'unknown' ? '进度连接中断，点击查看' : '构建中，点击查看' }}
       </button>
-      <KeepAlive include="Graph">
+      <KeepAlive include="Graph,Dashboard,Documents,History">
         <component :is="ActiveComp" @nav="(k) => (active = k)" @build-progress="buildProgress = $event" />
       </KeepAlive>
     </main>

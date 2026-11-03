@@ -36,7 +36,7 @@
 </template>
 
 <script setup>
-import { onMounted, ref } from 'vue'
+import { onActivated, ref } from 'vue'
 import { api } from '../api'
 import GraphViz from '../components/GraphViz.vue'
 import CitedAnswer from '../components/CitedAnswer.vue'
@@ -87,7 +87,7 @@ async function clearAll() {
   total.value = 0
 }
 
-onMounted(refresh)
+onActivated(refresh)
 </script>
 
 <style scoped>
