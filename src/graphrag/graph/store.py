@@ -65,10 +65,6 @@ class GraphStore:
 
     # ---------- 构建 ----------
 
-    def add_extraction(self, ext: ChunkExtraction, chunk_id: str) -> tuple[int, int]:
-        self.rebuild({**self._extractions, chunk_id: ext})
-        return len(ext.entities), sum(chunk_id in d["source_chunks"] for *_, d in self.G.edges(data=True))
-
     def rebuild(self, extractions: dict[str, ChunkExtraction]) -> None:
         self._extractions = dict(extractions)
         self.G = nx.MultiDiGraph()
@@ -84,12 +80,6 @@ class GraphStore:
                 sources, targets = endpoints.get(normalize_str(rel.source), set()), endpoints.get(normalize_str(rel.target), set())
                 if len(sources) == len(targets) == 1:
                     self._merge_relation(rel, cid, next(iter(sources)), next(iter(targets)))
-
-    def upsert_entity(self, ent: Entity, chunk_id: str) -> str:
-        ext = self._extractions.get(chunk_id, ChunkExtraction()).model_copy(deep=True)
-        ext.entities.append(ent)
-        self.add_extraction(ext, chunk_id)
-        return self.resolver.entity_key(ent.name, ent.type.value)
 
     def _key_name(self, key: str) -> str:
         """实体 key 是类型与规范名组成的 JSON 字符串；缓存解析结果，避免热路径反复 json.loads。"""

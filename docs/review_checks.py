@@ -62,6 +62,19 @@ def extraction():
     )
 
 
+def add_extraction(store, ext, chunk_id):
+    """测试用增量合图：等价于原 GraphStore.add_extraction（已从生产类移除）。"""
+    store.rebuild({**store._extractions, chunk_id: ext})
+
+
+def upsert_entity(store, ent, chunk_id):
+    """测试用实体追加：等价于原 GraphStore.upsert_entity（已从生产类移除）。"""
+    ext = store._extractions.get(chunk_id, ChunkExtraction()).model_copy(deep=True)
+    ext.entities.append(ent)
+    add_extraction(store, ext, chunk_id)
+    return store.resolver.entity_key(ent.name, ent.type.value)
+
+
 class ReviewChecks(unittest.TestCase):
     def setUp(self):
         self.tmp = tempfile.TemporaryDirectory(dir=_sandbox.name)
@@ -212,7 +225,7 @@ class ReviewChecks(unittest.TestCase):
 
     def test_graphml_round_trip_with_real_node_attributes(self):
         store = GraphStore()
-        store.add_extraction(extraction(), "doc:0")
+        add_extraction(store, extraction(), "doc:0")
         restored = nx.parse_graphml(store.export_graphml())
         self.assertEqual(restored.number_of_nodes(), 2)
         self.assertEqual(restored.number_of_edges(), 1)
@@ -229,7 +242,7 @@ class ReviewChecks(unittest.TestCase):
         ):
             store = GraphStore()
             for i, ent in enumerate(entities):
-                store.upsert_entity(ent, f"doc:{i}")
+                upsert_entity(store, ent, f"doc:{i}")
             counts.append(store.G.number_of_nodes())
         self.assertEqual(counts, [1, 1])
 
@@ -246,7 +259,7 @@ class ReviewChecks(unittest.TestCase):
     def test_delete_api_removes_facts_without_other_sources(self):
         service = RagService()
         doc = service.ingest([("sample.txt", "星辰科技与清华大学合作。".encode())])[0]
-        service.store.add_extraction(extraction(), f"{doc['doc_id']}:0")
+        add_extraction(service.store, extraction(), f"{doc['doc_id']}:0")
         with patch.object(routes, "service", service):
             response = TestClient(app).delete(f"/api/documents/{doc['doc_id']}")
         self.assertEqual(response.status_code, 200)
@@ -392,7 +405,7 @@ class ReviewChecks(unittest.TestCase):
 
     def test_seed_count_respects_node_limit(self):
         store = GraphStore()
-        seeds = [store.upsert_entity(entity(name), "doc:0") for name in ("甲", "乙")]
+        seeds = [upsert_entity(store, entity(name), "doc:0") for name in ("甲", "乙")]
         subgraph, _ = store.expand(seeds, max_nodes=1)
         self.assertLessEqual(subgraph.number_of_nodes(), 1)
         self.assertEqual(store.expand(seeds, max_nodes=0)[0].number_of_nodes(), 0)
@@ -402,7 +415,7 @@ class ReviewChecks(unittest.TestCase):
         from graphrag.retrieval.graph_search import GraphSearch
 
         store = GraphStore()
-        store.add_extraction(extraction(), "doc:0")
+        add_extraction(store, extraction(), "doc:0")
         result = GraphSearch(store).search("问题", seed_override=["科技", "清华大学"], max_nodes=1)
         self.assertEqual(result["seed_nodes"], [store.locate("清华大学")])
         self.assertEqual(result["subgraph"].number_of_nodes(), 1)
@@ -411,7 +424,7 @@ class ReviewChecks(unittest.TestCase):
     def test_failed_extraction_is_not_reported_as_success(self):
         service = RagService()
         service.ingest([("sample.txt", "星辰科技与清华大学合作。".encode())])
-        service.store.add_extraction(extraction(), "old:0")
+        add_extraction(service.store, extraction(), "old:0")
         service.store.meta["built_at"] = "previous build"
         progress = []
         with patch.object(EntityExtractor, "extract", return_value=None), \
@@ -726,11 +739,11 @@ class ReviewChecks(unittest.TestCase):
 
     def test_snapshot_is_atomic_and_legacy_graph_can_load(self):
         store = GraphStore()
-        store.add_extraction(extraction(), "doc:0")
+        add_extraction(store, extraction(), "doc:0")
         store.meta["processed_chunks"] = {"doc:0": "old-hash"}
         store.save()
         original = settings.graph_file.read_bytes()
-        store.upsert_entity(entity("新实体"), "doc:1")
+        upsert_entity(store, entity("新实体"), "doc:1")
         with patch("graphrag.graph.persistence.os.replace", side_effect=OSError("disk full")):
             with self.assertRaisesRegex(OSError, "disk full"):
                 store.save()
@@ -747,7 +760,7 @@ class ReviewChecks(unittest.TestCase):
 
     def test_committed_snapshot_does_not_depend_on_meta_mirror(self):
         store = GraphStore()
-        store.add_extraction(extraction(), "doc:0")
+        add_extraction(store, extraction(), "doc:0")
         store.meta["processed_chunks"] = {"doc:0": "hash"}
         with patch("graphrag.graph.store.save_meta", side_effect=OSError("mirror error")), \
              self.assertLogs("graphrag.graph.store", level="WARNING"):
@@ -791,7 +804,7 @@ class ReviewChecks(unittest.TestCase):
 
     def test_graph_versions_advance_only_on_committed_saves(self):
         store = GraphStore()
-        store.add_extraction(extraction(), "doc:0")
+        add_extraction(store, extraction(), "doc:0")
         store.save()
         self.assertEqual(store.meta["graph_version"], 1)
         with patch("graphrag.graph.persistence.os.replace", side_effect=OSError("disk full")):
@@ -807,7 +820,7 @@ class ReviewChecks(unittest.TestCase):
     def test_preview_has_consistent_version_counts_and_stable_bounded_ids(self):
         service = RagService()
         for name in ("a", "b", "c", "d"):
-            service.store.upsert_entity(entity(name), "doc:0")
+            upsert_entity(service.store, entity(name), "doc:0")
         for u in service.store.G:
             for v in service.store.G:
                 if u != v:
@@ -831,7 +844,7 @@ class ReviewChecks(unittest.TestCase):
 
     def test_running_build_blocks_clear_and_document_delete(self):
         service = RagService()
-        service.store.add_extraction(extraction(), "doc:0")
+        add_extraction(service.store, extraction(), "doc:0")
         with patch.object(routes, "service", service), \
              patch.object(routes, "_jobs", {"test": {"status": "running"}}), \
              patch.object(service.chunks, "delete_document") as delete, \
