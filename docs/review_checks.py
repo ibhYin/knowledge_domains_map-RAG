@@ -204,8 +204,8 @@ class ReviewChecks(unittest.TestCase):
             with self.subTest(status=expected_status):
                 service.search.query_extractor._chain = Mock(invoke=Mock(return_value=output))
                 with patch.object(routes, "service", service), \
-                     patch.object(routes, "_load_history", return_value=[]), \
-                     patch.object(routes, "_save_history") as save:
+                     patch.object(routes.history_store, "_load", return_value=[]), \
+                     patch.object(routes.history_store, "_save") as save:
                     response = TestClient(app).post("/api/query", json={"question": "测试问题"})
                 self.assertEqual(response.status_code, expected_status)
                 if expected_status == 502:
@@ -216,7 +216,7 @@ class ReviewChecks(unittest.TestCase):
                     save.assert_called_once()
         with patch.object(routes, "service", service), \
              patch.object(service.search, "search", side_effect=RuntimeError("unexpected bug")), \
-             patch.object(routes, "_save_history") as save:
+             patch.object(routes.history_store, "_save") as save:
             response = TestClient(app, raise_server_exceptions=False).post(
                 "/api/query", json={"question": "测试问题"}
             )
@@ -333,7 +333,7 @@ class ReviewChecks(unittest.TestCase):
             {"text": "清华大学是一所大学。", "citations": [{"source_id": 1, "quote": "清华大学是一所大学。"}]}]})),
             AIMessage(content='{"supported":[0]}')]))
         with patch.object(routes, "service", service), \
-             patch.object(routes, "_HISTORY_FILE", settings.data_dir / "history.json"), \
+             patch.object(routes.history_store, "path", settings.data_dir / "history.json"), \
              patch("graphrag.pipeline.service.build_llm", return_value=fake):
             client = TestClient(app)
             response = client.post("/api/query", json={"question": "大学？", "seed_override": ["清华大学"]})

@@ -1,6 +1,4 @@
-import json
 import os
-import threading
 import time
 from pathlib import Path
 from typing import Optional
@@ -10,9 +8,9 @@ from fastapi import APIRouter, HTTPException, Query, UploadFile
 from fastapi.concurrency import run_in_threadpool
 from fastapi.responses import PlainTextResponse
 
+from graphrag.api.history import HistoryStore
 from graphrag.api.jobs import JobConflict, JobManager
 from graphrag.config import fresh_llm_config, settings, write_env
-from graphrag.graph.persistence import _write_json
 from graphrag.llm.extractor import QueryExtractionError
 from graphrag.pipeline.service import service
 from graphrag.schemas.api import BuildRequest, QueryRequest
@@ -20,6 +18,7 @@ from graphrag.schemas.api import BuildRequest, QueryRequest
 router = APIRouter(prefix="/api")
 
 job_manager = JobManager()
+history_store = HistoryStore()
 
 # 进程启动时记录，用于在页面上确认后端加载的是哪一版代码。
 _STARTED_AT = time.strftime("%Y-%m-%d %H:%M:%S")
@@ -37,24 +36,6 @@ def _latest_code_mtime() -> str:
 
 
 _CODE_MTIME = _latest_code_mtime()
-
-_HISTORY_FILE = settings.data_dir / "history.json"
-_HISTORY_LIMIT = 100
-_history_lock = threading.Lock()
-
-
-def _load_history() -> list[dict]:
-    if not _HISTORY_FILE.exists():
-        return []
-    try:
-        return json.loads(_HISTORY_FILE.read_text(encoding="utf-8"))
-    except json.JSONDecodeError:
-        return []
-
-
-def _save_history(history: list[dict]) -> None:
-    _HISTORY_FILE.parent.mkdir(parents=True, exist_ok=True)
-    _write_json(history[-_HISTORY_LIMIT:], _HISTORY_FILE)
 
 
 @router.get("/health")
@@ -241,41 +222,24 @@ def save_settings(body: dict):
     return {"ok": True, "message": "配置已保存，新的 LLM 配置会在下次调用时生效"}
 
 
-_HISTORY_SUMMARY_FIELDS = ("question", "answer", "matched", "node_count", "edge_count",
-                           "verification", "used_docs", "ts")
-
-
 @router.get("/history")
 def history(offset: int = Query(0, ge=0), limit: int = Query(20, ge=1, le=100)):
-    with _history_lock:
-        items = _load_history()
     # 列表只回摘要（不含 context/subgraph/sentences/sources 等大字段），详情按需取。
-    ordered = list(enumerate(items))[::-1]
-    window = ordered[offset:offset + limit]
-    return {
-        "total": len(items),
-        "items": [{**{k: item.get(k) for k in _HISTORY_SUMMARY_FIELDS}, "index": index}
-                  for index, item in window],
-    }
+    return history_store.page(offset, limit)
 
 
 @router.get("/history/{index}")
 def history_detail(index: int):
-    with _history_lock:
-        items = _load_history()
-    if not 0 <= index < len(items):
-        raise HTTPException(status_code=404, detail="历史记录不存在")
-    item = items[index]
     active = {d["doc_id"] for d in service.list_documents()}
-    for source in [*(item.get("sources") or []), *(item.get("retrieved_sources") or [])]:
-        source["deleted"] = source["doc_id"] not in active
-    return {**item, "index": index}
+    item = history_store.detail(index, active)
+    if item is None:
+        raise HTTPException(status_code=404, detail="历史记录不存在")
+    return item
 
 
 @router.delete("/history")
 def clear_history():
-    with _history_lock:
-        _save_history([])
+    history_store.clear()
     return {"cleared": True}
 
 
@@ -331,18 +295,15 @@ def query(body: QueryRequest):
         )
     except QueryExtractionError as exc:
         raise HTTPException(status_code=502, detail=str(exc)) from exc
-    with _history_lock:
-        history_list = _load_history()
-        history_list.append({
-            "question": body.question,
-            "answer": result["answer"],
-            "matched": [m["name"] for m in result["matched_entities"]],
-            "node_count": result["node_count"],
-            "edge_count": result["edge_count"],
-            "context": result["context"],
-            "subgraph": result["subgraph"],
-            **{k: result.get(k) for k in ("sentences", "sources", "retrieved_sources", "verification", "used_docs", "graph_version")},
-            "ts": time.strftime("%Y-%m-%d %H:%M:%S"),
-        })
-        _save_history(history_list)
+    history_store.append({
+        "question": body.question,
+        "answer": result["answer"],
+        "matched": [m["name"] for m in result["matched_entities"]],
+        "node_count": result["node_count"],
+        "edge_count": result["edge_count"],
+        "context": result["context"],
+        "subgraph": result["subgraph"],
+        **{k: result.get(k) for k in ("sentences", "sources", "retrieved_sources", "verification", "used_docs", "graph_version")},
+        "ts": time.strftime("%Y-%m-%d %H:%M:%S"),
+    })
     return result
