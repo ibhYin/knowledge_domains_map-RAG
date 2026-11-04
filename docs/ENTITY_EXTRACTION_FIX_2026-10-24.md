@@ -19,7 +19,7 @@
 
 1. 仅修改本地 `.env` 的 OPENAI_BASE_URL 一行，并逐行确认其他配置保持原值。`.env` 已被 Git 忽略，提交代码不会携带密钥；其他环境需自行填写正确地址。
 2. 在 README 增加协议地址说明、重启要求及单分块真实检查命令。保留通用 OpenAI 兼容客户端，不在业务代码中硬编码供应商地址或自动猜测协议。
-3. 新增 [smoke_extract.py](/Volumes/xiaoPai/Documents/RAG+Konwledge_domains_map/docs/smoke_extract.py)，通过现有服务层做真实模型冒烟检查，使用临时目录，不修改原文档与图谱。
+3. 新增 [smoke_extract.py](../scripts/smoke_extract.py)，通过现有服务层做真实模型冒烟检查，使用临时目录，不修改原文档与图谱。
 4. 重新构建 web/dist，使普通模式静态托管的页面包含之前修复的构建状态反馈；启动当前源码的本机服务。
 
 ## 真实验证
@@ -48,7 +48,7 @@
 在已安装项目依赖、配置有效模型的 Python 环境中，从仓库根目录执行：
 
 ```bash
-python docs/smoke_extract.py
+python scripts/smoke_extract.py
 ```
 
 该命令会真实调用模型两次：一次文档抽取建图、一次问题实体抽取。数据目录使用 TemporaryDirectory，结束后删除测试数据；不重建已有 4 份 PDF 的 1,823 个分块。

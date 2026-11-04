@@ -41,7 +41,7 @@
 | 前端 | Vue 3、ECharts、7 个功能页 | 展示完整；目前最有价值的是检索透明度 |
 | 本机运行 | Shell、macOS `.command`、双 FastAPI 进程 | 使用方便，但硬编码 Conda 环境影响他人复现 |
 
-关键入口：[编排服务](/Volumes/xiaoPai/Documents/RAG+Konwledge_domains_map/src/graphrag/pipeline/service.py:29)、[图存储与扩张](/Volumes/xiaoPai/Documents/RAG+Konwledge_domains_map/src/graphrag/graph/store.py:16)、[检索链](/Volumes/xiaoPai/Documents/RAG+Konwledge_domains_map/src/graphrag/retrieval/graph_search.py:7)。
+关键入口：[编排服务](../src/graphrag/pipeline/service.py:29)、[图存储与扩张](../src/graphrag/graph/store.py:16)、[检索链](../src/graphrag/retrieval/graph_search.py:7)。
 
 ## 2. 与行业代表方案比较
 
@@ -78,7 +78,7 @@
 
 ### P0：两处抽取提示词都不能正确作为模板构造
 
-位置：[文档抽取链](/Volumes/xiaoPai/Documents/RAG+Konwledge_domains_map/src/graphrag/llm/extractor.py:98)、[问题抽取链](/Volumes/xiaoPai/Documents/RAG+Konwledge_domains_map/src/graphrag/llm/extractor.py:140)。
+位置：[文档抽取链](../src/graphrag/llm/extractor.py:98)、[问题抽取链](../src/graphrag/llm/extractor.py:140)。
 
 两段 system prompt 中包含未转义的 JSON `{...}`，却通过 `("system", prompt_string)` 交给默认 f-string 模板解析。当前 `langchain-core 1.4.0` 在链创建阶段抛出 `ValueError: Invalid format specifier ... Nested replacement fields are not allowed`。两个入口都已离线复现，真实模型尚未被调用。
 
@@ -90,7 +90,7 @@
 
 ### P1：结构化输出失败后的原始消息恢复分支会再次异常
 
-位置：[EntityExtractor](/Volumes/xiaoPai/Documents/RAG+Konwledge_domains_map/src/graphrag/llm/extractor.py:123)、[QueryEntityExtractor](/Volumes/xiaoPai/Documents/RAG+Konwledge_domains_map/src/graphrag/llm/extractor.py:163)。
+位置：[EntityExtractor](../src/graphrag/llm/extractor.py:123)、[QueryEntityExtractor](../src/graphrag/llm/extractor.py:163)。
 
 `include_raw=True` 的 `raw` 是 `AIMessage`，当前当字典调用 `.get("content")`。用真实 `AIMessage` 和假 Runnable 已复现 `AttributeError`，且发生在包裹 invoke 的 try 之外。
 
@@ -98,7 +98,7 @@
 
 ### P1：删除文档后，其事实仍留在图谱并可继续被回答
 
-位置：[删除 API](/Volumes/xiaoPai/Documents/RAG+Konwledge_domains_map/src/graphrag/api/routes.py:89)、[文件删除实现](/Volumes/xiaoPai/Documents/RAG+Konwledge_domains_map/src/graphrag/pipeline/chunk_store.py:84)。
+位置：[删除 API](../src/graphrag/api/routes.py:89)、[文件删除实现](../src/graphrag/pipeline/chunk_store.py:84)。
 
 API 只删注册表、原文和 chunks，未撤销图节点、关系、别名或处理记录。隔离 API 检查中，文档列表已空，而两个实体和关系仍存在。再次“构建图谱”也不会删除没有对应 chunk 的旧事实。
 
@@ -108,7 +108,7 @@ API 只删注册表、原文和 chunks，未撤销图节点、关系、别名或
 
 ### P1：别名归并结果取决于入库顺序
 
-位置：[别名注册](/Volumes/xiaoPai/Documents/RAG+Konwledge_domains_map/src/graphrag/graph/entity_resolver.py:23)、[实体 upsert](/Volumes/xiaoPai/Documents/RAG+Konwledge_domains_map/src/graphrag/graph/store.py:55)。
+位置：[别名注册](../src/graphrag/graph/entity_resolver.py:23)、[实体 upsert](../src/graphrag/graph/store.py:55)。
 
 先加入“北大”，再加入别名含“北大”的“北京大学”，得到两个节点；交换顺序只得到一个。`setdefault` 新增了别名映射，却没有把已有节点的属性、边和来源迁移合并。
 
@@ -116,7 +116,7 @@ API 只删注册表、原文和 chunks，未撤销图节点、关系、别名或
 
 ### P1：多个 GraphStore 共享可变默认元数据
 
-位置：[默认元数据与构造](/Volumes/xiaoPai/Documents/RAG+Konwledge_domains_map/src/graphrag/graph/store.py:8)、[clear](/Volumes/xiaoPai/Documents/RAG+Konwledge_domains_map/src/graphrag/graph/store.py:36)。
+位置：[默认元数据与构造](../src/graphrag/graph/store.py:8)、[clear](../src/graphrag/graph/store.py:36)。
 
 浅拷贝 `DEFAULT_META` 没有复制内部的 `processed_chunks`／`stats`。已验证两个新实例的 `processed_chunks` 是同一对象。未从磁盘覆盖这些字段时，状态可串到其他实例或清空后的图，导致错误跳过。
 
@@ -124,7 +124,7 @@ API 只删注册表、原文和 chunks，未撤销图节点、关系、别名或
 
 ### P1：GraphML 导出不能处理当前图属性，空图也返回空文本
 
-位置：[导出实现](/Volumes/xiaoPai/Documents/RAG+Konwledge_domains_map/src/graphrag/graph/persistence.py:34)。
+位置：[导出实现](../src/graphrag/graph/persistence.py:34)。
 
 节点／边含 `aliases`、`source_chunks` 等 list 属性，当前直接交给 GraphML，复现 `TypeError: GraphML does not support type <class 'list'>`。另有文本缓冲区问题：在当前环境空图导出长度为 0，并非合法 XML。
 
@@ -132,7 +132,7 @@ API 只删注册表、原文和 chunks，未撤销图节点、关系、别名或
 
 ### P1：抽取全失败仍报告构建完成
 
-位置：[任务汇总](/Volumes/xiaoPai/Documents/RAG+Konwledge_domains_map/src/graphrag/pipeline/service.py:99)。
+位置：[任务汇总](../src/graphrag/pipeline/service.py:99)。
 
 假模型返回 `None` 时，任务最终为 `done`，仅附带 `failed`。这与 P0 组合后尤其容易掩盖故障。
 
@@ -140,7 +140,7 @@ API 只删注册表、原文和 chunks，未撤销图节点、关系、别名或
 
 ### P1：`used_docs` 漏掉仅由节点提供的证据
 
-位置：[来源聚合](/Volumes/xiaoPai/Documents/RAG+Konwledge_domains_map/src/graphrag/pipeline/service.py:143)。
+位置：[来源聚合](../src/graphrag/pipeline/service.py:143)。
 
 回答上下文含节点描述，但来源只从 edges 聚合。单个命中实体没有关系边时，仍能生成回答，`used_docs` 却为空，已通过假模型验证。
 
@@ -148,7 +148,7 @@ API 只删注册表、原文和 chunks，未撤销图节点、关系、别名或
 
 ### P2：种子数量可以突破 `max_nodes`
 
-位置：[扩张入口](/Volumes/xiaoPai/Documents/RAG+Konwledge_domains_map/src/graphrag/graph/store.py:185)。
+位置：[扩张入口](../src/graphrag/graph/store.py:185)。
 
 所有 seeds 在截断前先进入 collected；两个 seeds、`max_nodes=1` 时返回两个节点。真实种子较多或使用 `seed_override` 时，预算名义上有限但没有严格落实。
 
@@ -218,7 +218,7 @@ API 只删注册表、原文和 chunks，未撤销图节点、关系、别名或
 
 改进：本机默认保持 loopback，明确允许的 Origin；若公开演示，优先提供只读固定语料版本，关闭设置／上传／清图／进程控制入口。确需管理入口再加简单鉴权。校验 URL、长度与换行，安全序列化环境配置；不要对任意端点发送已有密钥。
 
-**图谱 tooltip 把上传文本衍生的名称与描述拼成 HTML。** 见 [GraphViz.vue](/Volumes/xiaoPai/Documents/RAG+Konwledge_domains_map/web/src/components/GraphViz.vue:59)。该位置没有 HTML 转义，属于不可信内容进入 HTML 的风险路径；本次没有做浏览器执行验证，不能宣称已经完成 XSS 利用证明。
+**图谱 tooltip 把上传文本衍生的名称与描述拼成 HTML。** 见 [GraphViz.vue](../web/src/components/GraphViz.vue:59)。该位置没有 HTML 转义，属于不可信内容进入 HTML 的风险路径；本次没有做浏览器执行验证，不能宣称已经完成 XSS 利用证明。
 
 改进：对动态值转义或改用安全文本渲染；不要把模型输出当成可信内容。文档内容进入抽取／回答时也要明确是证据数据，加入提示注入样例，结合引用与评测检查行为。
 
@@ -360,8 +360,8 @@ API 只删注册表、原文和 chunks，未撤销图节点、关系、别名或
 - 后端初查环境：Python 3.10.18、NetworkX 3.4.2、langchain-core 1.4.0、langchain-openai 1.2.1。原 Conda 环境存在额外机器学习包与 NumPy 兼容警告，因此另建临时隔离环境验证项目依赖内的行为；没有调整原环境。
 - 隔离环境按 `requirements.txt` 安装，并固定与初查一致的 NetworkX 3.4.2、langchain-core 1.4.0、langchain-openai 1.2.1；实际安装 langchain-text-splitters 1.1.2、FastAPI 0.161.1、Pydantic 2.14.1。它验证了一个满足依赖声明的环境，未验证全部允许版本的兼容性。
 - 原项目运行数据：注册表和历史文件不存在，当前 graph／processed_chunks 均为空。这只能说明当前快照没有可用样本，不能推断项目从未运行过。
-- 离线检查：[review_checks.py](/Volumes/xiaoPai/Documents/RAG+Konwledge_domains_map/docs/review_checks.py)。使用假模型、临时目录和标准库 unittest，失败断言用于记录当前缺陷；它不是“全绿测试”的成果。
+- 离线检查：[review_checks.py](../tests/review_checks.py)。使用假模型、临时目录和标准库 unittest，失败断言用于记录当前缺陷；它不是“全绿测试”的成果。
 - 隔离复跑结果：12 个测试方法中 2 个通过、10 个暴露问题；unittest 汇总为 `failures=6, errors=5`，因为 raw 恢复的一个测试方法包含两个均异常的子用例。通过项是“未变化 chunk 跳过抽取”和“Unicode 规范化”；其余覆盖本报告第 4 节的缺陷。这是定向回归检查的结果，不能当作问答准确率或整体测试覆盖率。
 - 未进行真实模型调用、问答质量测试、并发容量压测、浏览器交互或安全利用测试；本报告没有提供虚构准确率、吞吐量或业务收益。
 
-复跑方式：在安装本项目依赖的干净 Python 环境中，从仓库根目录运行 `python docs/review_checks.py`。脚本会替换自身进程的模型端点和数据目录；所有模型响应均由假对象提供，不需要 API Key，不写原有数据。
+复跑方式：在安装本项目依赖的干净 Python 环境中，从仓库根目录运行 `python tests/review_checks.py`。脚本会替换自身进程的模型端点和数据目录；所有模型响应均由假对象提供，不需要 API Key，不写原有数据。

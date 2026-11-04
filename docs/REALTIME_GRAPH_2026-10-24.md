@@ -45,8 +45,8 @@
 ### 自动检查
 
 - Python：28 项已修复范围内的回归检查通过，其中新增定时发布、版本提交、预览边界和并发保护检查。6 项此前明确记录的未修复审查用例仍不计入通过项。
-- `node --experimental-vm-modules docs/check_build_task.mjs`：任务恢复、版本变化更新、相同版本不重复请求、切页暂停画布、迟到响应不回退、图更新失败保留旧图、300 节点上限通过。
-- `node --experimental-vm-modules docs/check_graph_viz.mjs`：稳定系列／边 ID、合并更新、选中保留、tooltip 转义／关系悬浮、空图及 resize／dispose 生命周期通过。
+- `node --experimental-vm-modules web/scripts/check_build_task.mjs`：任务恢复、版本变化更新、相同版本不重复请求、切页暂停画布、迟到响应不回退、图更新失败保留旧图、300 节点上限通过。
+- `node --experimental-vm-modules web/scripts/check_graph_viz.mjs`：稳定系列／边 ID、合并更新、选中保留、tooltip 转义／关系悬浮、空图及 resize／dispose 生命周期通过。
 - 前端生产构建通过，原有大包警告未在本轮处理。
 
 ### 浏览器集成验证
@@ -63,7 +63,7 @@
 
 测试控制器等待期间有 1 个假抽取请求超时，任务正确返回 partial，保留 24 个实体／23 条关系；点击重新构建仅处理该失败分块，最终 done、25 个实体／24 条关系，版本 5。没有重复抽取先前成功的 23 个分块。隔离服务与页面在验收后关闭。
 
-截图：[阶段 1](/Volumes/xiaoPai/Documents/RAG+Konwledge_domains_map/docs/assets/realtime-stage-1.png)、[阶段 2](/Volumes/xiaoPai/Documents/RAG+Konwledge_domains_map/docs/assets/realtime-stage-2.png)、[阶段 3](/Volumes/xiaoPai/Documents/RAG+Konwledge_domains_map/docs/assets/realtime-stage-3.png)。
+截图：[阶段 1](../docs/assets/realtime-stage-1.png)、[阶段 2](../docs/assets/realtime-stage-2.png)、[阶段 3](../docs/assets/realtime-stage-3.png)。
 
 ## 启用限制
 

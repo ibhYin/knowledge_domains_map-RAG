@@ -1,6 +1,10 @@
 # 知识图谱 RAG 系统（GraphRAG）
 
-基于 **NetworkX + LangChain + 中文 LLM 实体抽取**的知识图谱 RAG 项目，提供 FastAPI 后端与 Vue 3 前端页面（含知识图谱可视化）。
+面向**多领域中文百科语料**（人物/组织/地理/科技/事件）的知识图谱 RAG 系统：用 LLM 从文档抽取实体与关系构建图谱（NetworkX 持久化），查询时从问题种子实体 BFS 扩张检索，**不依赖向量库**；回答逐句附原文引用并通过证据校验，无法回答时诚实拒答。内置可复现的评测工具链（手工金标 + 合成回归集），FastAPI 后端 + Vue 3 前端（含图谱可视化）。
+
+| 问答（逐句引用与证据校验） | 图谱可视化 |
+|---|---|
+| ![问答页](docs/assets/qa-answer.png) | ![图谱画布](docs/assets/graph-canvas.png) |
 
 ## 架构
 
@@ -9,23 +13,25 @@
 查询: 问题 → LLM 抽种子实体 → 定位 → BFS 扩张 → 中文上下文 → LLM 生成答案
 ```
 
-纯图谱检索，不依赖向量库。实体抽取与问答使用 OpenAI 兼容端点（自定义 base_url + api_key）。
+实体抽取与问答使用 OpenAI 兼容端点（自定义 base_url + api_key）。
 
 ## 目录结构
 
 ```
 ├── src/graphrag/          # 后端（config/schemas/loaders/splitting/llm/graph/retrieval/pipeline/api）
 │   └── supervisor/        # 引导服务（后台管理启停与自动重载，端口 8001，无页面）
-├── scripts/restart.sh     # 重启后端（构建中询问；--supervisor 连控制服务一起重启）
 ├── web/                   # Vue 3 + Vite + ECharts 前端
+├── tests/review_checks.py # 离线回归检查（51 项，假模型 + 临时目录，不调真实模型）
+├── scripts/               # restart.sh、smoke_extract.py（真实模型冒烟）
+├── evals/                 # 评测工具链（语料拉取/金标/合成集/运行器）
 ├── data/                  # 运行时数据（文档/分块/图谱/日志，git 忽略）
-├── 启动GraphRAG.command   # 双击启动（确保运行并显示当前进程信息）
-├── start.sh               # 命令行版启动脚本
+├── 启动GraphRAG.command   # macOS 双击启动
+├── start.sh               # 命令行启动/重启脚本
 ├── .env.example           # 环境变量模板
 └── requirements.txt
 ```
 
-## 端口与架构
+## 端口
 
 | 端口 | 服务 | 说明 |
 |---|---|---|
@@ -36,16 +42,28 @@
 
 ## 快速开始
 
-### 1. 配置环境（仅首次）
+前置要求：Python 3.10+、Node.js 18+、一个 OpenAI 兼容的模型端点（base_url + api_key）。conda 非必需，但启动脚本默认按 conda 环境启动。
+
+### 1. 后端环境（仅首次）
 
 ```bash
-conda activate langchain
-pip install fastapi python-docx    # 仅需补充这两个包
+conda create -n langchain python=3.10 -y   # 环境名可自取，用 CONDA_ENV 环境变量指定
+conda activate langchain                   # 或 export CONDA_ENV=你的环境名
+pip install -r requirements.txt
+cp .env.example .env                       # 填入你的 base_url / api_key / 模型名
 ```
 
-### 2. 启动
+### 2. 前端构建（仅首次）
 
-**方式 A（推荐，无需终端）**：双击项目根目录的 `启动GraphRAG.command` → 确保系统运行并打开 http://localhost:8002；已在运行则不会打断当前任务。窗口会显示后端 PID、启动时间和自动重载状态。
+后端只在 `web/dist` 存在时提供页面，clone 后必须先构建：
+
+```bash
+cd web && npm install && npm run build && cd ..
+```
+
+### 3. 启动
+
+**方式 A（推荐，macOS，无需终端）**：双击项目根目录的 `启动GraphRAG.command` → 确保系统运行并打开 http://localhost:8002；已在运行则不会打断当前任务。窗口会显示后端 PID、启动时间和自动重载状态。
 
 **方式 B（命令行）**：
 
@@ -55,7 +73,9 @@ pip install fastapi python-docx    # 仅需补充这两个包
 ./start.sh dev        # 开发模式：前端 :5173 + 后端 :8002（热更新）
 ```
 
-### 3. 代码变更与重启
+> 手动启动后端备用命令：`PYTHONPATH=src python -m uvicorn graphrag.api.main:app --port 8002`
+
+### 4. 代码变更与重启
 
 - 改后端代码（`src/`，不含 `supervisor/`）：控制服务空闲时自动重载；构建进行中会延后到任务结束。页面无需刷新。
 - 改前端代码：重新构建 `web/dist` 后刷新页面即可，无需重启后端。
@@ -63,13 +83,11 @@ pip install fastapi python-docx    # 仅需补充这两个包
 - 改非 LLM 的 `.env` 配置（分块、并发、发布间隔等）：`./start.sh restart`。
 - 在「模型设置」页保存 base_url / api_key / model 不需要重启，下一次模型调用即生效。
 
-### 4. 日常使用（都在 8002）
+### 5. 日常使用（都在 8002）
 
 1. **模型设置**页：填写 **base_url / api_key / model** → 保存；新建的模型请求使用新配置
 2. **文档**页上传 → **图谱**页构建 → **问答**页提问
 3. 构建时可以切换页面；刷新后进入图谱页，会继续显示最近一次任务。后端代码变更会在构建结束后自动重载；手动重启（`./start.sh restart`）会终止正在运行的任务，页面会提示任务不存在，重新点击构建可从已保存的进度继续
-
-> 手动启动后端备用命令：`PYTHONPATH=src uvicorn src.graphrag.api.main:app --port 8002`
 
 ## 使用流程
 
@@ -101,51 +119,16 @@ pip install fastapi python-docx    # 仅需补充这两个包
 | `LLM_TIMEOUT` / `LLM_MAX_RETRIES` | 模型请求超时秒数（默认 120）/ SDK 层重试次数（默认 3） |
 | `CHUNK_SIZE` / `CHUNK_OVERLAP` | 分块大小/重叠（字符） |
 | `EXTRACTION_CONCURRENCY` | 抽取并发数 |
-| `BUILD_CHECKPOINT_INTERVAL` | 阶段保存间隔，默认新增 5 个成功分块；首个成功结果立即保存；大语料下会按总量自适应放宽（发布会次数限制在约 50 次以内） |
-| `BUILD_PUBLISH_INTERVAL` | 有新结果时的最长批次等待时间，默认 2 秒；慢请求尚未返回时也会定时发布已完成结果 |
+| `BUILD_CHECKPOINT_INTERVAL` | 阶段保存间隔，默认新增 5 个成功分块；首个成功结果立即保存；大语料下会按总量自适应放宽 |
+| `BUILD_PUBLISH_INTERVAL` | 有新结果时的最长批次等待时间，默认 2 秒 |
 | `BACKEND_AUTORELOAD` | 后端源码变更自动重载，默认 `1`（开启）；`0` 关闭 |
-| `BACKEND_AUTORELOAD_INTERVAL` | 自动重载检查间隔（秒），默认 `2` |
-| `EXTRACTION_THINKING` | 可选 enabled / disabled，仅对支持 thinking 参数的模型设置；只作用于文档和问题实体抽取，默认不发送该参数 |
-
-### 长任务与进度
-
-每个成功分块的抽取底稿原子保存到 `data/extractions/<doc_id>/<chunk_index>.json`，包含实体、关系、内容哈希和抽取配置指纹。空结果也会缓存；失败不缓存（模型输出偶发格式异常时应用层自动重试一次）。重试优先复用底稿，即使图谱保存失败，也无需重复调用模型。内容或模型、提示词、结构变更时缓存失效，并重新合图以清除旧贡献。构建启动时抽取客户端全进程共享（连接池跨分块复用），续建判定直接走内存索引与内存抽取缓存，数千分块恢复接近零磁盘读。
-
-检查点发布在后台单线程串行执行：收割循环只提交快照载荷即继续处理后续分块，发布（全量重放 + 落盘）不再阻塞进度；上一次发布未完成时自动合并跳过，构建结束前会等待最终发布完成（「done」状态返回时图谱必已落盘，版本号随发布单调递增）。
-
-删除文档时，从剩余底稿本地重新合图，重新计算实体描述、来源、次数和关系权重，不调用模型。删除期间以 `deleting` 占位与构建/清空互斥，重放本身不阻塞状态轮询。新图和删除记录一起原子保存，提交前失败保留原数据；提交后清理文件若中断，已删文档不会参与查询或构建，启动时继续清理。剩余已入图分块若缺少有效缓存，会拒绝删除，避免丢失其他文档的事实。构建中禁止删除；清空图谱保留抽取底稿，重建可以复用。
-
-合图先汇总底稿中的类型、规范名与明确别名，再确定节点身份，消除抽取完成顺序的影响。不同类型的同名实体分开；同一简称存在多个目标时保留独立实体，查询不会随意选其中一个。节点 ID 是类型与规范名组成的 JSON 字符串，前端应将其视为不透明标识。
-
-新版后端可通过 `/api/graph/build/current` 找到当前任务，不依赖某个浏览器事先记住任务 ID。页面显示处理百分比、成功／失败数量、最近获取进度的时间；切换页面后顶部仍显示当前任务。
-
-分块按完成顺序合图，避免一个慢请求堵住后面已完成的进度。首个成功结果立即保存，之后新增 5 个成功分块或有新结果等待 2 秒时保存、发布一版图谱。网页每 1.5 秒查询进度，发现版本变化才读取新的画布快照，构建途中也能看到节点与关系增长。图谱与成功处理记录放入同一个原子快照；中断后重新启动并点击构建，可跳过已保存的成功分块。支持读取原有图谱格式；meta.json 保留为兼容镜像，以 graph.json 内的 metadata 为准。
-
-实体／关系数量与画布来自同一已保存版本。默认画布最多展示前 300 个实体、900 条关系，并标明完整数量；完整图谱仍保存，可通过图谱浏览器查看其他实体。切到其他页面后继续查询任务进度，但暂停隐藏画布更新；返回后读取最新版本。新节点加入时复用已有节点 ID 和布局，保留缩放、平移及选中状态。
-
-若模型支持关闭深度思考，可配置 `EXTRACTION_THINKING=disabled`，先用短样例验证速度和抽取质量。切换到不支持 thinking 的服务时，应移除此配置；不应只为提速盲目增加并发。
-
-后端源码变更后，控制服务（:8001）会自动重载后端：空闲时立即重载，构建进行中则等任务结束再重载。重载会清空内存中的任务状态，但已发布的图谱与成功处理记录都已落盘，重新点击构建可跳过已处理分块。启动时 `main.py` 会从 `data/graph/` 重新加载图谱，重启不会丢失已发布内容；只有最后一个未发布批次（最多约 5 个分块）需要重做。
-
-### 火山方舟 Coding Plan 配置
-
-本项目使用 OpenAI 兼容协议。Coding Plan 的 `OPENAI_BASE_URL` 应填写：
-
-```text
-https://ark.cn-beijing.volces.com/api/coding/v3
-```
-
-`https://ark.cn-beijing.volces.com/api/coding` 是 Anthropic 协议入口，直接填入本项目会导致请求返回 404。协议与地址对应关系见 [火山方舟官方说明](https://docs.volcengine.com/docs/ark/coding-plan-personal-ai-hermes-agent?lang=en)。模型和密钥使用自己账号的有效配置。
-
-后端源码变更由控制服务自动重载；`supervisor/` 自身的改动需要 `./start.sh restart --supervisor`。手工重启使用 `./start.sh restart`（构建中会询问，`--force` 跳过）。自动重载是否生效、当前后端 PID 与代码更新时间显示在「模型设置」页的「运行状态」卡片，也可通过 `GET /api/health` 与 `GET /api/control/status` 查看。
-
-整批建图前，可先运行 `python docs/smoke_extract.py`：使用内置短文本，正常通过四次真实模型调用检查文档抽取、问题实体抽取、逐句引用和证据审核，同时验证缓存重建、删除、重启及 GraphML 导出。检查使用临时目录，不修改原有文档或图谱；需要先安装项目依赖并配置模型。
+| `EXTRACTION_THINKING` | 可选 enabled / disabled，仅对支持 thinking 参数的模型设置；只作用于抽取调用，默认不发送该参数 |
 
 ## 评测
 
 内置可复现的评测工具链（语料拉取 → 金标/合成集 → 运行器 → 报告），报告输出到 `data/evals/report_*.json`：
 
-- `evals/fetch_corpus.py`：从中文维基镜像（hf-mirror）拉取 50 篇文档入库并建图，预览缓存 `data/cache/corpus_preview/`，索引 `data/evals/corpus_index.json`（event/geo/general/org/person/tech 六类）。
+- `evals/fetch_corpus.py`：从中文维基镜像（hf-mirror）拉取 50 篇文档入库并建图，索引 `data/evals/corpus_index.json`（event/geo/general/org/person/tech 六类）。
 - `evals/gold/wiki_gold.jsonl`：**手工金标 20 题**（六类覆盖 × 单跳事实/实体关系/时间/否定边界四题型），每题 gold_quotes 逐字摘自分块原文，`evals/gold/build_gold.py` 内置逐字校验，写入前强制通过。
 - `evals/generate_qa.py`：从分块合成回归集 `data/evals/synthetic.jsonl`（57 题），quote 必须是分块逐字子串（防循环引用），自动跳过纯标题块。
 - `evals/run_eval.py`：评测运行器，逐题调用 `service.answer` 并输出来源召回率 / 引用正确率 / 忠实度 / 逐字引用校验通过率 / 否定题诚实拒答率 / 种子定位率与延迟 p50/p95。
@@ -184,16 +167,14 @@ PYTHONPATH=src python evals/run_eval.py data/evals/synthetic.jsonl --mode full -
 
 ## 说明与限制
 
-- 新回答按事实句附带分块引用，可展开证据片段和完整原文。实际引用与检索到但未引用的材料分开展示，实体描述来源也会收集。
+- 新回答按事实句附带分块引用，可展开证据片段和完整原文。实际引用与检索到但未引用的材料分开展示。
 - 回答先核对引用编号和逐字原文，再调用一次模型审核每句结论是否由完整分块支持；未通过的句子移除，校验失败返回错误。语义审核仍依赖模型判断，并非事实正确性的证明。单次生成最多提供前 40 个来源分块，其他检索来源仍可查看。
-- 问答历史保存当时的原文证据快照；删除文档后历史仍可核对，来源标记为“原文已删除”。历史证据随问答历史一起清除。历史列表按摘要分页返回（默认每页 20 条），展开单条时才加载完整详情。
+- 问答历史保存当时的原文证据快照；删除文档后历史仍可核对，来源标记为“原文已删除”。
+- 纯图谱检索：问题实体不在图中时无法回答，系统会诚实提示（可配合 `seed_override` 调试）。
+- 中文 PDF 依赖内嵌文本，扫描件需 OCR（预留扩展点）。
+- 若结构化输出大面积失败，切换 `STRUCTURED_OUTPUT_METHOD=function_calling`。
 
-### 性能与运行时行为
+## 更多文档
 
-- 分块、抽取缓存与文档注册表在内存中维护索引：问答检索不再每次重读全部语料 JSONL；上传解析运行在线程池（事件循环不冻结），删除重放不阻塞任务状态轮询。
-- 图谱画布构建期间增量刷新：已有节点沿用当前力导向布局坐标，新节点在质心附近落点；重叠的关系标签自动隐藏（信息保留在 tooltip）。
-- 「模型设置」页保存的 LLM 配置按指纹缓存问答客户端，配置变化下一次调用生效；抽取客户端在构建期间共享同一连接池。
-
-- 纯图谱检索：问题实体不在图中时无法回答，系统会诚实提示（可配合 `seed_override` 调试）
-- 中文 PDF 依赖内嵌文本，扫描件需 OCR（预留扩展点）
-- 若结构化输出大面积失败，切换 `STRUCTURED_OUTPUT_METHOD=function_calling`
+- [docs/INTERNALS.md](docs/INTERNALS.md)：构建检查点与增量发布机制、长任务与进度实现细节、火山方舟 Coding Plan 配置、真实模型冒烟检查。
+- [docs/](docs/)：开发历程与工程决策记录（审查报告、修复方案、实时图谱与实体抽取改造记录）。
