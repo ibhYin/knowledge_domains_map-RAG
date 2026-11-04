@@ -1,0 +1,366 @@
+{
+  "dataset": "evals/gold/wiki_gold.jsonl",
+  "mode": "seed",
+  "elapsed_s": 793.4,
+  "summary": {
+    "n_questions": 20,
+    "recall": 0.9375,
+    "citation_precision": 0.7812,
+    "faithful_rate": 0.8,
+    "quote_exact_rate": 1.0,
+    "honest_refusal_rate": 1.0,
+    "seed_hit_rate": null,
+    "latency_p50_ms": 22851.2,
+    "latency_p95_ms": 67766.9,
+    "latency_max_ms": 306484.7,
+    "retrieval_ms_avg": 17.0,
+    "llm_ms_avg": 39599.9
+  },
+  "rows": [
+    {
+      "question": "《南京条约》是清朝在哪一年签订的？",
+      "qtype": "temporal",
+      "mode": "seed",
+      "verification": "verified",
+      "quote_exact": true,
+      "latency_ms": 40152.4,
+      "timings": {
+        "retrieval_ms": 2.3,
+        "sources_ms": 58.8,
+        "rerank_ms": 26.0,
+        "llm_ms": 40065.3
+      },
+      "recall": 1.0,
+      "citation_precision": 0.5
+    },
+    {
+      "question": "五四运动中学生们抗议的是哪次会议上有关山东问题的决议？",
+      "qtype": "single_hop",
+      "mode": "seed",
+      "verification": "verified",
+      "quote_exact": true,
+      "latency_ms": 28728.7,
+      "timings": {
+        "retrieval_ms": 16.7,
+        "sources_ms": 4.7,
+        "rerank_ms": 48.3,
+        "llm_ms": 28659.0
+      },
+      "recall": 1.0,
+      "citation_precision": 1.0
+    },
+    {
+      "question": "改革开放是由谁提出、在哪次会议后正式实施的？",
+      "qtype": "relation",
+      "mode": "seed",
+      "verification": "verified",
+      "quote_exact": true,
+      "latency_ms": 306484.7,
+      "timings": {
+        "retrieval_ms": 13.4,
+        "sources_ms": 3.2,
+        "rerank_ms": 77.0,
+        "llm_ms": 306391.1
+      },
+      "recall": 0.0,
+      "citation_precision": 0.0
+    },
+    {
+      "question": "郑和七次下西洋总共耗费了多少白银？",
+      "qtype": "negative",
+      "mode": "seed",
+      "verification": "insufficient",
+      "quote_exact": true,
+      "latency_ms": 20652.4,
+      "timings": {
+        "retrieval_ms": 38.0,
+        "sources_ms": 12.3,
+        "rerank_ms": 36.8,
+        "llm_ms": 20565.3
+      },
+      "honest_refusal": true
+    },
+    {
+      "question": "长江全长多少公里，是世界第几长河？",
+      "qtype": "single_hop",
+      "mode": "seed",
+      "verification": "verified",
+      "quote_exact": true,
+      "latency_ms": 24484.8,
+      "timings": {
+        "retrieval_ms": 31.1,
+        "sources_ms": 2.8,
+        "rerank_ms": 62.7,
+        "llm_ms": 24388.2
+      },
+      "recall": 1.0,
+      "citation_precision": 1.0
+    },
+    {
+      "question": "北京背靠哪座山脉、位于什么平原的北部边缘？",
+      "qtype": "relation",
+      "mode": "seed",
+      "verification": "verified",
+      "quote_exact": true,
+      "latency_ms": 22851.2,
+      "timings": {
+        "retrieval_ms": 35.6,
+        "sources_ms": 4.3,
+        "rerank_ms": 89.4,
+        "llm_ms": 22721.9
+      },
+      "recall": 1.0,
+      "citation_precision": 1.0
+    },
+    {
+      "question": "西湖位于哪个城市的什么方位？",
+      "qtype": "single_hop",
+      "mode": "seed",
+      "verification": "verified",
+      "quote_exact": true,
+      "latency_ms": 15180.6,
+      "timings": {
+        "retrieval_ms": 8.3,
+        "sources_ms": 2.1,
+        "rerank_ms": 38.8,
+        "llm_ms": 15131.4
+      },
+      "recall": 1.0,
+      "citation_precision": 1.0
+    },
+    {
+      "question": "青藏高原的冰川总储量大约是多少立方米？",
+      "qtype": "negative",
+      "mode": "seed",
+      "verification": "insufficient",
+      "quote_exact": true,
+      "latency_ms": 7616.5,
+      "timings": {
+        "retrieval_ms": 18.5,
+        "sources_ms": 1.2,
+        "rerank_ms": 31.5,
+        "llm_ms": 7565.3
+      },
+      "honest_refusal": true
+    },
+    {
+      "question": "世界上最早的气象书籍是什么？",
+      "qtype": "single_hop",
+      "mode": "seed",
+      "verification": "verified",
+      "quote_exact": true,
+      "latency_ms": 9336.3,
+      "timings": {
+        "retrieval_ms": 5.7,
+        "sources_ms": 3.2,
+        "rerank_ms": 3.4,
+        "llm_ms": 9324.0
+      },
+      "recall": 1.0,
+      "citation_precision": 1.0
+    },
+    {
+      "question": "牛顿因提出三大运动定律获得了哪一年的诺贝尔奖？",
+      "qtype": "negative",
+      "mode": "seed",
+      "verification": "insufficient",
+      "quote_exact": true,
+      "latency_ms": 6123.3,
+      "timings": {
+        "retrieval_ms": 15.0,
+        "sources_ms": 1.1,
+        "rerank_ms": 6.7,
+        "llm_ms": 6100.5
+      },
+      "honest_refusal": true
+    },
+    {
+      "question": "开启现代科学海洋学的是哪次远征？",
+      "qtype": "single_hop",
+      "mode": "seed",
+      "verification": "verified",
+      "quote_exact": true,
+      "latency_ms": 17123.1,
+      "timings": {
+        "retrieval_ms": 4.3,
+        "sources_ms": 1.4,
+        "rerank_ms": 2.1,
+        "llm_ms": 17115.3
+      },
+      "recall": 1.0,
+      "citation_precision": 1.0
+    },
+    {
+      "question": "清华大学始建于哪一年？",
+      "qtype": "temporal",
+      "mode": "seed",
+      "verification": "verified",
+      "quote_exact": true,
+      "latency_ms": 67766.9,
+      "timings": {
+        "retrieval_ms": 14.5,
+        "sources_ms": 1.9,
+        "rerank_ms": 74.1,
+        "llm_ms": 67676.4
+      },
+      "recall": 1.0,
+      "citation_precision": 0.5
+    },
+    {
+      "question": "中国科学院是何时、在哪里成立的？",
+      "qtype": "temporal",
+      "mode": "seed",
+      "verification": "verified",
+      "quote_exact": true,
+      "latency_ms": 22785.1,
+      "timings": {
+        "retrieval_ms": 13.1,
+        "sources_ms": 68.0,
+        "rerank_ms": 45.2,
+        "llm_ms": 22658.8
+      },
+      "recall": 1.0,
+      "citation_precision": 0.5
+    },
+    {
+      "question": "腾讯的总部位于哪里？",
+      "qtype": "single_hop",
+      "mode": "seed",
+      "verification": "verified",
+      "quote_exact": true,
+      "latency_ms": 30942.4,
+      "timings": {
+        "retrieval_ms": 16.8,
+        "sources_ms": 4.9,
+        "rerank_ms": 27.6,
+        "llm_ms": 30893.1
+      },
+      "recall": 1.0,
+      "citation_precision": 0.5
+    },
+    {
+      "question": "李白与哪位诗人一起被认定为盛唐最伟大的诗人？",
+      "qtype": "relation",
+      "mode": "seed",
+      "verification": "verified",
+      "quote_exact": true,
+      "latency_ms": 20351.4,
+      "timings": {
+        "retrieval_ms": 36.0,
+        "sources_ms": 3.8,
+        "rerank_ms": 62.5,
+        "llm_ms": 20249.1
+      },
+      "recall": 1.0,
+      "citation_precision": 1.0
+    },
+    {
+      "question": "苏轼的号是什么？",
+      "qtype": "single_hop",
+      "mode": "seed",
+      "verification": "verified",
+      "quote_exact": true,
+      "latency_ms": 43685.7,
+      "timings": {
+        "retrieval_ms": 18.8,
+        "sources_ms": 2.1,
+        "rerank_ms": 31.7,
+        "llm_ms": 43633.1
+      },
+      "recall": 1.0,
+      "citation_precision": 1.0
+    },
+    {
+      "question": "岳飞的词作《满江红·写怀》创作于哪一年？",
+      "qtype": "negative",
+      "mode": "seed",
+      "verification": "insufficient",
+      "quote_exact": true,
+      "latency_ms": 14206.5,
+      "timings": {
+        "retrieval_ms": 9.8,
+        "sources_ms": 3.7,
+        "rerank_ms": 32.2,
+        "llm_ms": 14160.8
+      },
+      "honest_refusal": true
+    },
+    {
+      "question": "活字印刷术的发明者是谁？",
+      "qtype": "relation",
+      "mode": "seed",
+      "verification": "verified",
+      "quote_exact": true,
+      "latency_ms": 51935.4,
+      "timings": {
+        "retrieval_ms": 7.8,
+        "sources_ms": 1.7,
+        "rerank_ms": 4.6,
+        "llm_ms": 51921.3
+      },
+      "recall": 1.0,
+      "citation_precision": 1.0
+    },
+    {
+      "question": "传说中蔡伦在哪一年发明了纸？",
+      "qtype": "temporal",
+      "mode": "seed",
+      "verification": "verified",
+      "quote_exact": true,
+      "latency_ms": 23684.7,
+      "timings": {
+        "retrieval_ms": 17.7,
+        "sources_ms": 2.6,
+        "rerank_ms": 19.2,
+        "llm_ms": 23645.2
+      },
+      "recall": 1.0,
+      "citation_precision": 0.5
+    },
+    {
+      "question": "学术界一般认为火药发明于什么时候的哪个国家？",
+      "qtype": "single_hop",
+      "mode": "seed",
+      "verification": "verified",
+      "quote_exact": true,
+      "latency_ms": 19234.8,
+      "timings": {
+        "retrieval_ms": 15.6,
+        "sources_ms": 3.6,
+        "rerank_ms": 83.1,
+        "llm_ms": 19132.5
+      },
+      "recall": 1.0,
+      "citation_precision": 1.0
+    }
+  ],
+  "graph": {
+    "nodes": 6927,
+    "edges": 8462,
+    "node_types": {
+      "PERSON": 1098,
+      "TIME": 865,
+      "LOCATION": 1489,
+      "CONCEPT": 2093,
+      "EVENT": 293,
+      "ORG": 1089
+    },
+    "edge_relations": {
+      "AFFILIATED_WITH": 656,
+      "RELATED_TO": 3708,
+      "LOCATED_IN": 910,
+      "CREATED": 434,
+      "IN_PERIOD": 1374,
+      "MEMBER_OF": 596,
+      "PARTNERS_WITH": 45,
+      "USES": 225,
+      "AFFECTS": 293,
+      "FOUNDED_BY": 88,
+      "CAUSES": 64,
+      "INVENTED_BY": 36,
+      "PROPOSED_BY": 33
+    },
+    "built_at": "2026-11-04 05:00:06",
+    "graph_version": 53
+  }
+}
