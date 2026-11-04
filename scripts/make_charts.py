@@ -116,29 +116,6 @@ def chart_rank_distribution(ax: plt.Axes) -> None:
     ax.legend(fontsize=9)
 
 
-def chart_latency(ax: plt.Axes) -> None:
-    """p50/p95 延迟：重排前后对比（每组 4 柱：p50前/后、p95前/后）。"""
-    groups = [("金标 seed", "wiki-gold-seed"), ("金标 full", "wiki-gold-full"), ("合成 full", "synthetic-full")]
-    bar_width = 0.19
-    specs = [("p50·前", "latency_p50_ms", COLOR_BEFORE, 0.85),
-             ("p50·后", "latency_p50_ms", COLOR_AFTER, 1.0),
-             ("p95·前", "latency_p95_ms", COLOR_BEFORE, 0.55),
-             ("p95·后", "latency_p95_ms", COLOR_AFTER, 0.65)]
-    legend_done = False
-    for i, (glabel, gtag) in enumerate(groups):
-        before = load(f"baseline-{gtag}.json")["summary"]
-        after = load(f"after-{gtag}.json")["summary"]
-        for k, (lbl, key, color, alpha) in enumerate(specs):
-            value = (after if "后" in lbl else before)[key] / 1000
-            label = lbl if not legend_done else None
-            ax.bar(i + (k - 1.5) * bar_width, value, bar_width, color=color, alpha=alpha, label=label)
-        legend_done = True
-    ax.set_xticks(range(len(groups)), [g for g, _ in groups], fontsize=10)
-    ax.set_ylabel("秒")
-    ax.set_title("端到端延迟 p50 / p95（重排前后）")
-    ax.grid(axis="y", alpha=0.3)
-    ax.legend(fontsize=8, ncol=4)
-
 
 def main() -> None:
     ASSETS.mkdir(parents=True, exist_ok=True)
@@ -146,7 +123,6 @@ def main() -> None:
         ("benchmark-metrics.png", chart_metrics_current, (8, 4.5)),
         ("rerank-before-after.png", chart_rerank_before_after, (8, 4.5)),
         ("gold-rank-dist.png", chart_rank_distribution, (9, 4.5)),
-        ("latency-compare.png", chart_latency, (8, 4.5)),
     ]
     for name, drawer, size in figures:
         fig, ax = plt.subplots(figsize=size, dpi=150)
