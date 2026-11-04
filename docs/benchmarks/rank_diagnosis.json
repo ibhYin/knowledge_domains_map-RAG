@@ -1,0 +1,172 @@
+{
+  "max_answer_sources": 40,
+  "n_questions": 16,
+  "gold_found_before": 15,
+  "gold_found_after": 15,
+  "mean_rank_before": 50.3,
+  "mean_rank_after": 1.9,
+  "in_window_rate_before": 0.4375,
+  "in_window_rate_after": 0.9375,
+  "rows": [
+    {
+      "question": "《南京条约》是清朝在哪一年签订的？",
+      "qtype": "temporal",
+      "seed_hit": true,
+      "n_candidates": 42,
+      "rank_before": 9,
+      "rank_after": 1,
+      "in_window_before": true,
+      "in_window_after": true
+    },
+    {
+      "question": "五四运动中学生们抗议的是哪次会议上有关山东问题的决议？",
+      "qtype": "single_hop",
+      "seed_hit": true,
+      "n_candidates": 118,
+      "rank_before": 39,
+      "rank_after": 5,
+      "in_window_before": true,
+      "in_window_after": true
+    },
+    {
+      "question": "改革开放是由谁提出、在哪次会议后正式实施的？",
+      "qtype": "relation",
+      "seed_hit": true,
+      "n_candidates": 179,
+      "rank_before": null,
+      "rank_after": null,
+      "in_window_before": false,
+      "in_window_after": false
+    },
+    {
+      "question": "长江全长多少公里，是世界第几长河？",
+      "qtype": "single_hop",
+      "seed_hit": true,
+      "n_candidates": 132,
+      "rank_before": 96,
+      "rank_after": 2,
+      "in_window_before": false,
+      "in_window_after": true
+    },
+    {
+      "question": "北京背靠哪座山脉、位于什么平原的北部边缘？",
+      "qtype": "relation",
+      "seed_hit": true,
+      "n_candidates": 230,
+      "rank_before": 170,
+      "rank_after": 1,
+      "in_window_before": false,
+      "in_window_after": true
+    },
+    {
+      "question": "西湖位于哪个城市的什么方位？",
+      "qtype": "single_hop",
+      "seed_hit": true,
+      "n_candidates": 89,
+      "rank_before": 70,
+      "rank_after": 1,
+      "in_window_before": false,
+      "in_window_after": true
+    },
+    {
+      "question": "世界上最早的气象书籍是什么？",
+      "qtype": "single_hop",
+      "seed_hit": true,
+      "n_candidates": 11,
+      "rank_before": 3,
+      "rank_after": 1,
+      "in_window_before": true,
+      "in_window_after": true
+    },
+    {
+      "question": "开启现代科学海洋学的是哪次远征？",
+      "qtype": "single_hop",
+      "seed_hit": true,
+      "n_candidates": 3,
+      "rank_before": 1,
+      "rank_after": 1,
+      "in_window_before": true,
+      "in_window_after": true
+    },
+    {
+      "question": "清华大学始建于哪一年？",
+      "qtype": "temporal",
+      "seed_hit": true,
+      "n_candidates": 170,
+      "rank_before": 124,
+      "rank_after": 1,
+      "in_window_before": false,
+      "in_window_after": true
+    },
+    {
+      "question": "中国科学院是何时、在哪里成立的？",
+      "qtype": "temporal",
+      "seed_hit": true,
+      "n_candidates": 111,
+      "rank_before": 55,
+      "rank_after": 1,
+      "in_window_before": false,
+      "in_window_after": true
+    },
+    {
+      "question": "腾讯的总部位于哪里？",
+      "qtype": "single_hop",
+      "seed_hit": true,
+      "n_candidates": 70,
+      "rank_before": 56,
+      "rank_after": 2,
+      "in_window_before": false,
+      "in_window_after": true
+    },
+    {
+      "question": "李白与哪位诗人一起被认定为盛唐最伟大的诗人？",
+      "qtype": "relation",
+      "seed_hit": true,
+      "n_candidates": 132,
+      "rank_before": 1,
+      "rank_after": 1,
+      "in_window_before": true,
+      "in_window_after": true
+    },
+    {
+      "question": "苏轼的号是什么？",
+      "qtype": "single_hop",
+      "seed_hit": true,
+      "n_candidates": 84,
+      "rank_before": 46,
+      "rank_after": 6,
+      "in_window_before": false,
+      "in_window_after": true
+    },
+    {
+      "question": "活字印刷术的发明者是谁？",
+      "qtype": "relation",
+      "seed_hit": true,
+      "n_candidates": 8,
+      "rank_before": 2,
+      "rank_after": 3,
+      "in_window_before": true,
+      "in_window_after": true
+    },
+    {
+      "question": "传说中蔡伦在哪一年发明了纸？",
+      "qtype": "temporal",
+      "seed_hit": true,
+      "n_candidates": 48,
+      "rank_before": 40,
+      "rank_after": 1,
+      "in_window_before": true,
+      "in_window_after": true
+    },
+    {
+      "question": "学术界一般认为火药发明于什么时候的哪个国家？",
+      "qtype": "single_hop",
+      "seed_hit": true,
+      "n_candidates": 202,
+      "rank_before": 43,
+      "rank_after": 1,
+      "in_window_before": false,
+      "in_window_after": true
+    }
+  ]
+}

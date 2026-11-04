@@ -1,0 +1,307 @@
+{
+  "source": "ffatty/plaintext-wikipedia-full-chinese (zhwiki, hf-mirror)",
+  "count": 50,
+  "total_chunks": 506,
+  "documents": [
+    {
+      "title": "丝绸之路",
+      "category": "event",
+      "doc_id": "fc40f8ddbce5",
+      "chunk_count": 11
+    },
+    {
+      "title": "五四运动",
+      "category": "event",
+      "doc_id": "45c1b790bf4e",
+      "chunk_count": 10
+    },
+    {
+      "title": "南京条约",
+      "category": "event",
+      "doc_id": "49197c6b749f",
+      "chunk_count": 11
+    },
+    {
+      "title": "戊戌变法",
+      "category": "event",
+      "doc_id": "89cade804b11",
+      "chunk_count": 11
+    },
+    {
+      "title": "改革开放",
+      "category": "event",
+      "doc_id": "1054aa935139",
+      "chunk_count": 11
+    },
+    {
+      "title": "文艺复兴",
+      "category": "event",
+      "doc_id": "833149235023",
+      "chunk_count": 11
+    },
+    {
+      "title": "新文化运动",
+      "category": "event",
+      "doc_id": "042465477f99",
+      "chunk_count": 10
+    },
+    {
+      "title": "洋务运动",
+      "category": "event",
+      "doc_id": "98b8dea1ef25",
+      "chunk_count": 11
+    },
+    {
+      "title": "第二次世界大战",
+      "category": "event",
+      "doc_id": "9ef427beef45",
+      "chunk_count": 12
+    },
+    {
+      "title": "郑和下西洋",
+      "category": "event",
+      "doc_id": "8f9394a5d689",
+      "chunk_count": 10
+    },
+    {
+      "title": "力学",
+      "category": "general",
+      "doc_id": "d48908ee4dc1",
+      "chunk_count": 6
+    },
+    {
+      "title": "地质学",
+      "category": "general",
+      "doc_id": "dadf6d980665",
+      "chunk_count": 7
+    },
+    {
+      "title": "民族",
+      "category": "general",
+      "doc_id": "9ded301d6038",
+      "chunk_count": 5
+    },
+    {
+      "title": "气象学",
+      "category": "general",
+      "doc_id": "c5a64bf8a631",
+      "chunk_count": 10
+    },
+    {
+      "title": "海洋学",
+      "category": "general",
+      "doc_id": "83d9d605be8e",
+      "chunk_count": 7
+    },
+    {
+      "title": "上海市",
+      "category": "geo",
+      "doc_id": "ab963a677f01",
+      "chunk_count": 10
+    },
+    {
+      "title": "京杭大运河",
+      "category": "geo",
+      "doc_id": "2b0aae88bf33",
+      "chunk_count": 10
+    },
+    {
+      "title": "北京市",
+      "category": "geo",
+      "doc_id": "996369b481e9",
+      "chunk_count": 11
+    },
+    {
+      "title": "太平洋",
+      "category": "geo",
+      "doc_id": "4de134a04a90",
+      "chunk_count": 11
+    },
+    {
+      "title": "广州市",
+      "category": "geo",
+      "doc_id": "d20763c408ae",
+      "chunk_count": 10
+    },
+    {
+      "title": "深圳市",
+      "category": "geo",
+      "doc_id": "0ee2c4c167f7",
+      "chunk_count": 10
+    },
+    {
+      "title": "西湖",
+      "category": "geo",
+      "doc_id": "d4ad54416a2a",
+      "chunk_count": 10
+    },
+    {
+      "title": "长江",
+      "category": "geo",
+      "doc_id": "a36a6f9ad42a",
+      "chunk_count": 10
+    },
+    {
+      "title": "青藏高原",
+      "category": "geo",
+      "doc_id": "2049ab99b134",
+      "chunk_count": 9
+    },
+    {
+      "title": "黄河",
+      "category": "geo",
+      "doc_id": "3e5db6da3efc",
+      "chunk_count": 10
+    },
+    {
+      "title": "中国中央电视台",
+      "category": "org",
+      "doc_id": "fa38e464e197",
+      "chunk_count": 12
+    },
+    {
+      "title": "中国工商银行",
+      "category": "org",
+      "doc_id": "3b3262e31d02",
+      "chunk_count": 11
+    },
+    {
+      "title": "中国科学院",
+      "category": "org",
+      "doc_id": "66297f3fdcd1",
+      "chunk_count": 12
+    },
+    {
+      "title": "北京大学",
+      "category": "org",
+      "doc_id": "5979c57c3cc5",
+      "chunk_count": 10
+    },
+    {
+      "title": "清华大学",
+      "category": "org",
+      "doc_id": "9e629dbc7531",
+      "chunk_count": 11
+    },
+    {
+      "title": "腾讯",
+      "category": "org",
+      "doc_id": "d837c303e97d",
+      "chunk_count": 11
+    },
+    {
+      "title": "阿里巴巴集团",
+      "category": "org",
+      "doc_id": "bf29c4031210",
+      "chunk_count": 10
+    },
+    {
+      "title": "岳飞",
+      "category": "person",
+      "doc_id": "024ecc5b5e99",
+      "chunk_count": 10
+    },
+    {
+      "title": "康熙帝",
+      "category": "person",
+      "doc_id": "9224aa265499",
+      "chunk_count": 10
+    },
+    {
+      "title": "李白",
+      "category": "person",
+      "doc_id": "009a46aa31c1",
+      "chunk_count": 10
+    },
+    {
+      "title": "林则徐",
+      "category": "person",
+      "doc_id": "905426113c19",
+      "chunk_count": 10
+    },
+    {
+      "title": "沈括",
+      "category": "person",
+      "doc_id": "39023a5aa95a",
+      "chunk_count": 10
+    },
+    {
+      "title": "王安石",
+      "category": "person",
+      "doc_id": "203d8d4ad4ad",
+      "chunk_count": 11
+    },
+    {
+      "title": "苏轼",
+      "category": "person",
+      "doc_id": "53bf134250f7",
+      "chunk_count": 10
+    },
+    {
+      "title": "詹天佑",
+      "category": "person",
+      "doc_id": "89a204f886ba",
+      "chunk_count": 11
+    },
+    {
+      "title": "诸葛亮",
+      "category": "person",
+      "doc_id": "2086bb6450d2",
+      "chunk_count": 10
+    },
+    {
+      "title": "人工智能",
+      "category": "tech",
+      "doc_id": "97d077230aa8",
+      "chunk_count": 12
+    },
+    {
+      "title": "全球定位系统",
+      "category": "tech",
+      "doc_id": "0ff223f5e37e",
+      "chunk_count": 10
+    },
+    {
+      "title": "北斗卫星导航系统",
+      "category": "tech",
+      "doc_id": "63d0f9ce9a81",
+      "chunk_count": 10
+    },
+    {
+      "title": "指南车",
+      "category": "tech",
+      "doc_id": "bdace3f138ae",
+      "chunk_count": 7
+    },
+    {
+      "title": "指南针",
+      "category": "tech",
+      "doc_id": "199fc004f9f4",
+      "chunk_count": 11
+    },
+    {
+      "title": "活字印刷术",
+      "category": "tech",
+      "doc_id": "03a365a6d207",
+      "chunk_count": 11
+    },
+    {
+      "title": "火药",
+      "category": "tech",
+      "doc_id": "347e718fcc93",
+      "chunk_count": 11
+    },
+    {
+      "title": "超级计算机",
+      "category": "tech",
+      "doc_id": "60ffe241f5eb",
+      "chunk_count": 11
+    },
+    {
+      "title": "造纸术",
+      "category": "tech",
+      "doc_id": "f5c3ad79e4f8",
+      "chunk_count": 10
+    }
+  ]
+}

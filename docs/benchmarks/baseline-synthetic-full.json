@@ -1,0 +1,850 @@
+{
+  "dataset": "data/evals/synthetic.jsonl",
+  "mode": "full",
+  "elapsed_s": 2359.8,
+  "summary": {
+    "n_questions": 50,
+    "recall": 0.78,
+    "citation_precision": 0.46,
+    "faithful_rate": 0.54,
+    "quote_exact_rate": 0.42,
+    "honest_refusal_rate": null,
+    "seed_hit_rate": 0.8,
+    "latency_p50_ms": 19298.3,
+    "latency_p95_ms": 230140.9,
+    "latency_max_ms": 724474.1,
+    "retrieval_ms_avg": 1384.6,
+    "llm_ms_avg": 45807.5
+  },
+  "rows": [
+    {
+      "question": "唐玄宗徵召李白後，任命他擔任什麼職務？",
+      "qtype": "single_hop",
+      "mode": "full",
+      "verification": "verified",
+      "quote_exact": false,
+      "latency_ms": 15119.4,
+      "timings": {
+        "retrieval_ms": 2177.7,
+        "sources_ms": 45.7,
+        "llm_ms": 12896.0
+      },
+      "recall": 1.0,
+      "citation_precision": 1.0,
+      "seed_hit": true
+    },
+    {
+      "question": "根据《旧唐书》记载，李白与山东任城是什么关系？",
+      "qtype": "relation",
+      "mode": "full",
+      "verification": "insufficient",
+      "quote_exact": true,
+      "latency_ms": 44039.7,
+      "timings": {
+        "retrieval_ms": 1790.9,
+        "sources_ms": 1.8,
+        "llm_ms": 42247.0
+      },
+      "recall": 1.0,
+      "citation_precision": 0.0,
+      "seed_hit": true
+    },
+    {
+      "question": "岳飞被诬陷死后，是哪位皇帝为他平反？",
+      "qtype": "single_hop",
+      "mode": "full",
+      "verification": "verified",
+      "quote_exact": false,
+      "latency_ms": 12745.6,
+      "timings": {
+        "retrieval_ms": 1676.5,
+        "sources_ms": 1.5,
+        "llm_ms": 11067.6
+      },
+      "recall": 1.0,
+      "citation_precision": 1.0,
+      "seed_hit": true
+    },
+    {
+      "question": "岳飞与岳和是什么关系？",
+      "qtype": "relation",
+      "mode": "full",
+      "verification": "verified",
+      "quote_exact": false,
+      "latency_ms": 34675.1,
+      "timings": {
+        "retrieval_ms": 1786.9,
+        "sources_ms": 1.1,
+        "llm_ms": 32887.1
+      },
+      "recall": 1.0,
+      "citation_precision": 1.0,
+      "seed_hit": true
+    },
+    {
+      "question": "毕昇大约在哪一年发明了胶泥活字印刷术？",
+      "qtype": "single_hop",
+      "mode": "full",
+      "verification": "verified",
+      "quote_exact": false,
+      "latency_ms": 17215.5,
+      "timings": {
+        "retrieval_ms": 1743.9,
+        "sources_ms": 2.0,
+        "llm_ms": 15469.6
+      },
+      "recall": 1.0,
+      "citation_precision": 1.0,
+      "seed_hit": true
+    },
+    {
+      "question": "畢昇製作活字的原料是什麼？",
+      "qtype": "relation",
+      "mode": "full",
+      "verification": "verified",
+      "quote_exact": false,
+      "latency_ms": 11150.0,
+      "timings": {
+        "retrieval_ms": 1220.7,
+        "sources_ms": 1.0,
+        "llm_ms": 9928.3
+      },
+      "recall": 1.0,
+      "citation_precision": 1.0,
+      "seed_hit": true
+    },
+    {
+      "question": "新文化运动的主要阵地有哪些？",
+      "qtype": "single_hop",
+      "mode": "full",
+      "verification": "verified",
+      "quote_exact": false,
+      "latency_ms": 16844.4,
+      "timings": {
+        "retrieval_ms": 1160.4,
+        "sources_ms": 1.1,
+        "llm_ms": 15682.9
+      },
+      "recall": 1.0,
+      "citation_precision": 1.0,
+      "seed_hit": true
+    },
+    {
+      "question": "新文化运动产生分化后，陈独秀和胡适分别做了什么？",
+      "qtype": "relation",
+      "mode": "full",
+      "verification": "verified",
+      "quote_exact": false,
+      "latency_ms": 230140.9,
+      "timings": {
+        "retrieval_ms": 1283.0,
+        "sources_ms": 2.8,
+        "llm_ms": 228855.1
+      },
+      "recall": 1.0,
+      "citation_precision": 1.0,
+      "seed_hit": true
+    },
+    {
+      "question": "2016年，深圳的地区生产总值超过哪个城市后跃居中国内地第三位？",
+      "qtype": "single_hop",
+      "mode": "full",
+      "verification": "verified",
+      "quote_exact": false,
+      "latency_ms": 22008.4,
+      "timings": {
+        "retrieval_ms": 1466.2,
+        "sources_ms": 5.4,
+        "llm_ms": 20536.8
+      },
+      "recall": 1.0,
+      "citation_precision": 1.0,
+      "seed_hit": true
+    },
+    {
+      "question": "深圳都市圈由哪些城市共同组成？",
+      "qtype": "relation",
+      "mode": "full",
+      "verification": "verified",
+      "quote_exact": false,
+      "latency_ms": 34508.1,
+      "timings": {
+        "retrieval_ms": 1335.6,
+        "sources_ms": 3.3,
+        "llm_ms": 33169.2
+      },
+      "recall": 1.0,
+      "citation_precision": 1.0,
+      "seed_hit": true
+    },
+    {
+      "question": "全球定位系统（GPS）是由哪一个国家的政府研制的？",
+      "qtype": "single_hop",
+      "mode": "full",
+      "verification": "insufficient",
+      "quote_exact": true,
+      "latency_ms": 1171.8,
+      "timings": {
+        "retrieval_ms": 1171.8,
+        "sources_ms": 0.0,
+        "llm_ms": 0.0
+      },
+      "recall": 0.0,
+      "citation_precision": 0.0,
+      "seed_hit": false
+    },
+    {
+      "question": "GPS系统是由谁开始研制的？",
+      "qtype": "relation",
+      "mode": "full",
+      "verification": "partial",
+      "quote_exact": false,
+      "latency_ms": 39172.7,
+      "timings": {
+        "retrieval_ms": 1406.4,
+        "sources_ms": 1.2,
+        "llm_ms": 37765.1
+      },
+      "recall": 1.0,
+      "citation_precision": 0.0,
+      "seed_hit": true
+    },
+    {
+      "question": "根据本文，指南针在南极点时，地表上的任何方向都可以被视为什么？",
+      "qtype": "single_hop",
+      "mode": "full",
+      "verification": "insufficient",
+      "quote_exact": true,
+      "latency_ms": 1128.5,
+      "timings": {
+        "retrieval_ms": 1128.5,
+        "sources_ms": 0.0,
+        "llm_ms": 0.0
+      },
+      "recall": 0.0,
+      "citation_precision": 0.0,
+      "seed_hit": false
+    },
+    {
+      "question": "磁铁这一名称与马格尼西亚有什么关系？",
+      "qtype": "relation",
+      "mode": "full",
+      "verification": "verified",
+      "quote_exact": false,
+      "latency_ms": 16790.5,
+      "timings": {
+        "retrieval_ms": 1223.8,
+        "sources_ms": 2.1,
+        "llm_ms": 15564.6
+      },
+      "recall": 1.0,
+      "citation_precision": 0.5,
+      "seed_hit": true
+    },
+    {
+      "question": "王安石的谥号是什么？",
+      "qtype": "single_hop",
+      "mode": "full",
+      "verification": "verified",
+      "quote_exact": false,
+      "latency_ms": 51924.5,
+      "timings": {
+        "retrieval_ms": 1174.2,
+        "sources_ms": 1.5,
+        "llm_ms": 50748.8
+      },
+      "recall": 1.0,
+      "citation_precision": 1.0,
+      "seed_hit": true
+    },
+    {
+      "question": "熙宁变法与“新旧党争”有什么关系？",
+      "qtype": "relation",
+      "mode": "full",
+      "verification": "verified",
+      "quote_exact": false,
+      "latency_ms": 92461.5,
+      "timings": {
+        "retrieval_ms": 1305.3,
+        "sources_ms": 1.5,
+        "llm_ms": 91154.7
+      },
+      "recall": 1.0,
+      "citation_precision": 0.5,
+      "seed_hit": true
+    },
+    {
+      "question": "青藏高原的平均海拔高度是多少？",
+      "qtype": "single_hop",
+      "mode": "full",
+      "verification": "verified",
+      "quote_exact": false,
+      "latency_ms": 22930.9,
+      "timings": {
+        "retrieval_ms": 1126.4,
+        "sources_ms": 2.2,
+        "llm_ms": 21802.3
+      },
+      "recall": 1.0,
+      "citation_precision": 1.0,
+      "seed_hit": true
+    },
+    {
+      "question": "珠穆朗玛峰和青藏高原之间存在什么关系？",
+      "qtype": "relation",
+      "mode": "full",
+      "verification": "verified",
+      "quote_exact": false,
+      "latency_ms": 46899.6,
+      "timings": {
+        "retrieval_ms": 1745.9,
+        "sources_ms": 1.4,
+        "llm_ms": 45152.3
+      },
+      "recall": 1.0,
+      "citation_precision": 0.5,
+      "seed_hit": true
+    },
+    {
+      "question": "诸葛亮曾发明了哪些器械？",
+      "qtype": "single_hop",
+      "mode": "full",
+      "verification": "verified",
+      "quote_exact": false,
+      "latency_ms": 35017.6,
+      "timings": {
+        "retrieval_ms": 1668.4,
+        "sources_ms": 2.9,
+        "llm_ms": 33346.3
+      },
+      "recall": 1.0,
+      "citation_precision": 1.0,
+      "seed_hit": true
+    },
+    {
+      "question": "诸葛亮与崔州平是什么关系？",
+      "qtype": "relation",
+      "mode": "full",
+      "verification": "verified",
+      "quote_exact": false,
+      "latency_ms": 80586.2,
+      "timings": {
+        "retrieval_ms": 1284.9,
+        "sources_ms": 1.5,
+        "llm_ms": 79299.8
+      },
+      "recall": 1.0,
+      "citation_precision": 0.5,
+      "seed_hit": true
+    },
+    {
+      "question": "京杭大运河的全长是多少公里？",
+      "qtype": "single_hop",
+      "mode": "full",
+      "verification": "insufficient",
+      "quote_exact": true,
+      "latency_ms": 1355.3,
+      "timings": {
+        "retrieval_ms": 1355.3,
+        "sources_ms": 0.0,
+        "llm_ms": 0.0
+      },
+      "recall": 0.0,
+      "citation_precision": 0.0,
+      "seed_hit": false
+    },
+    {
+      "question": "吴王夫差与邗沟之间有什么关系？",
+      "qtype": "relation",
+      "mode": "full",
+      "verification": "verified",
+      "quote_exact": false,
+      "latency_ms": 34539.2,
+      "timings": {
+        "retrieval_ms": 1267.3,
+        "sources_ms": 3.0,
+        "llm_ms": 33268.9
+      },
+      "recall": 1.0,
+      "citation_precision": 1.0,
+      "seed_hit": true
+    },
+    {
+      "question": "火药在广义上指什么？",
+      "qtype": "single_hop",
+      "mode": "full",
+      "verification": "insufficient",
+      "quote_exact": true,
+      "latency_ms": 19298.3,
+      "timings": {
+        "retrieval_ms": 1151.9,
+        "sources_ms": 1.5,
+        "llm_ms": 18144.9
+      },
+      "recall": 1.0,
+      "citation_precision": 0.0,
+      "seed_hit": true
+    },
+    {
+      "question": "中国炼丹家与伏火硫黄法之间是什么关系？",
+      "qtype": "relation",
+      "mode": "full",
+      "verification": "insufficient",
+      "quote_exact": true,
+      "latency_ms": 33892.2,
+      "timings": {
+        "retrieval_ms": 1251.3,
+        "sources_ms": 0.9,
+        "llm_ms": 32640.0
+      },
+      "recall": 1.0,
+      "citation_precision": 0.0,
+      "seed_hit": true
+    },
+    {
+      "question": "沈括流传后世的代表作是哪一部书？",
+      "qtype": "single_hop",
+      "mode": "full",
+      "verification": "verified",
+      "quote_exact": false,
+      "latency_ms": 13412.7,
+      "timings": {
+        "retrieval_ms": 1136.4,
+        "sources_ms": 1.5,
+        "llm_ms": 12274.8
+      },
+      "recall": 1.0,
+      "citation_precision": 1.0,
+      "seed_hit": true
+    },
+    {
+      "question": "沈括和卫朴两人合作编纂了哪一部历法？",
+      "qtype": "relation",
+      "mode": "full",
+      "verification": "verified",
+      "quote_exact": false,
+      "latency_ms": 17587.9,
+      "timings": {
+        "retrieval_ms": 1245.4,
+        "sources_ms": 2.1,
+        "llm_ms": 16340.4
+      },
+      "recall": 1.0,
+      "citation_precision": 1.0,
+      "seed_hit": true
+    },
+    {
+      "question": "中国工商银行成立时的注册资金是多少？",
+      "qtype": "single_hop",
+      "mode": "full",
+      "verification": "insufficient",
+      "quote_exact": true,
+      "latency_ms": 1170.6,
+      "timings": {
+        "retrieval_ms": 1170.6,
+        "sources_ms": 0.0,
+        "llm_ms": 0.0
+      },
+      "recall": 0.0,
+      "citation_precision": 0.0,
+      "seed_hit": false
+    },
+    {
+      "question": "中国工商银行上市后，在香港交易所的市值排名中位列第几，仅次于哪两家公司？",
+      "qtype": "relation",
+      "mode": "full",
+      "verification": "insufficient",
+      "quote_exact": true,
+      "latency_ms": 1662.3,
+      "timings": {
+        "retrieval_ms": 1662.3,
+        "sources_ms": 0.0,
+        "llm_ms": 0.0
+      },
+      "recall": 0.0,
+      "citation_precision": 0.0,
+      "seed_hit": false
+    },
+    {
+      "question": "黄河中游与下游的分界点是哪里？",
+      "qtype": "single_hop",
+      "mode": "full",
+      "verification": "verified",
+      "quote_exact": false,
+      "latency_ms": 36480.6,
+      "timings": {
+        "retrieval_ms": 1844.1,
+        "sources_ms": 3.2,
+        "llm_ms": 34633.3
+      },
+      "recall": 1.0,
+      "citation_precision": 1.0,
+      "seed_hit": true
+    },
+    {
+      "question": "黄河中下游流域与中华民族之间是什么关系？",
+      "qtype": "relation",
+      "mode": "full",
+      "verification": "insufficient",
+      "quote_exact": true,
+      "latency_ms": 4328.1,
+      "timings": {
+        "retrieval_ms": 1390.7,
+        "sources_ms": 1.6,
+        "llm_ms": 2935.8
+      },
+      "recall": 0.0,
+      "citation_precision": 0.0,
+      "seed_hit": true
+    },
+    {
+      "question": "五四運動發生在哪一天？",
+      "qtype": "single_hop",
+      "mode": "full",
+      "verification": "insufficient",
+      "quote_exact": true,
+      "latency_ms": 1358.4,
+      "timings": {
+        "retrieval_ms": 1358.4,
+        "sources_ms": 0.0,
+        "llm_ms": 0.0
+      },
+      "recall": 0.0,
+      "citation_precision": 0.0,
+      "seed_hit": false
+    },
+    {
+      "question": "關於“五四運動”和“新文化運動”，片段中呈現了哪些對其關係的觀點？",
+      "qtype": "relation",
+      "mode": "full",
+      "verification": "insufficient",
+      "quote_exact": true,
+      "latency_ms": 1562.3,
+      "timings": {
+        "retrieval_ms": 1562.3,
+        "sources_ms": 0.0,
+        "llm_ms": 0.0
+      },
+      "recall": 0.0,
+      "citation_precision": 0.0,
+      "seed_hit": false
+    },
+    {
+      "question": "《南京條約》是在哪一艘船上簽署的？",
+      "qtype": "single_hop",
+      "mode": "full",
+      "verification": "insufficient",
+      "quote_exact": true,
+      "latency_ms": 1128.8,
+      "timings": {
+        "retrieval_ms": 1128.8,
+        "sources_ms": 0.0,
+        "llm_ms": 0.0
+      },
+      "recall": 0.0,
+      "citation_precision": 0.0,
+      "seed_hit": false
+    },
+    {
+      "question": "琦善與義律私下訂定了哪份條約？",
+      "qtype": "relation",
+      "mode": "full",
+      "verification": "verified",
+      "quote_exact": false,
+      "latency_ms": 27512.2,
+      "timings": {
+        "retrieval_ms": 1382.4,
+        "sources_ms": 1.2,
+        "llm_ms": 26128.6
+      },
+      "recall": 1.0,
+      "citation_precision": 1.0,
+      "seed_hit": true
+    },
+    {
+      "question": "太平洋的面积大约是多少？",
+      "qtype": "single_hop",
+      "mode": "full",
+      "verification": "verified",
+      "quote_exact": false,
+      "latency_ms": 17180.1,
+      "timings": {
+        "retrieval_ms": 1214.8,
+        "sources_ms": 1.7,
+        "llm_ms": 15963.6
+      },
+      "recall": 1.0,
+      "citation_precision": 1.0,
+      "seed_hit": true
+    },
+    {
+      "question": "黑潮与阿留申洋流之间存在什么关系？",
+      "qtype": "relation",
+      "mode": "full",
+      "verification": "verified",
+      "quote_exact": false,
+      "latency_ms": 19660.0,
+      "timings": {
+        "retrieval_ms": 1333.8,
+        "sources_ms": 0.9,
+        "llm_ms": 18325.3
+      },
+      "recall": 1.0,
+      "citation_precision": 1.0,
+      "seed_hit": true
+    },
+    {
+      "question": "苏轼的号是什么？",
+      "qtype": "single_hop",
+      "mode": "full",
+      "verification": "insufficient",
+      "quote_exact": true,
+      "latency_ms": 4614.3,
+      "timings": {
+        "retrieval_ms": 1141.7,
+        "sources_ms": 2.1,
+        "llm_ms": 3470.5
+      },
+      "recall": 1.0,
+      "citation_precision": 0.0,
+      "seed_hit": true
+    },
+    {
+      "question": "苏轼与湖州画派是什么关系？",
+      "qtype": "relation",
+      "mode": "full",
+      "verification": "insufficient",
+      "quote_exact": true,
+      "latency_ms": 19144.3,
+      "timings": {
+        "retrieval_ms": 1601.5,
+        "sources_ms": 2.1,
+        "llm_ms": 17540.7
+      },
+      "recall": 1.0,
+      "citation_precision": 0.0,
+      "seed_hit": true
+    },
+    {
+      "question": "北京大学创立于哪一年？",
+      "qtype": "single_hop",
+      "mode": "full",
+      "verification": "insufficient",
+      "quote_exact": true,
+      "latency_ms": 29793.4,
+      "timings": {
+        "retrieval_ms": 1138.9,
+        "sources_ms": 3.2,
+        "llm_ms": 28651.3
+      },
+      "recall": 1.0,
+      "citation_precision": 0.0,
+      "seed_hit": true
+    },
+    {
+      "question": "孙家鼐在京师大学堂担任什么职务？",
+      "qtype": "relation",
+      "mode": "full",
+      "verification": "insufficient",
+      "quote_exact": true,
+      "latency_ms": 21240.8,
+      "timings": {
+        "retrieval_ms": 1349.9,
+        "sources_ms": 1.4,
+        "llm_ms": 19889.5
+      },
+      "recall": 1.0,
+      "citation_precision": 0.0,
+      "seed_hit": true
+    },
+    {
+      "question": "什么是超级计算机？",
+      "qtype": "single_hop",
+      "mode": "full",
+      "verification": "verified",
+      "quote_exact": false,
+      "latency_ms": 724474.1,
+      "timings": {
+        "retrieval_ms": 1290.8,
+        "sources_ms": 1.6,
+        "llm_ms": 723181.7
+      },
+      "recall": 1.0,
+      "citation_precision": 0.3333333333333333,
+      "seed_hit": true
+    },
+    {
+      "question": "超级计算机通常在哪些类型的运算工作中发挥作用？",
+      "qtype": "relation",
+      "mode": "full",
+      "verification": "insufficient",
+      "quote_exact": true,
+      "latency_ms": 47298.6,
+      "timings": {
+        "retrieval_ms": 1209.8,
+        "sources_ms": 5.0,
+        "llm_ms": 46083.8
+      },
+      "recall": 1.0,
+      "citation_precision": 0.0,
+      "seed_hit": true
+    },
+    {
+      "question": "北斗二号系统一共由多少颗卫星组成？",
+      "qtype": "single_hop",
+      "mode": "full",
+      "verification": "insufficient",
+      "quote_exact": true,
+      "latency_ms": 1178.8,
+      "timings": {
+        "retrieval_ms": 1178.8,
+        "sources_ms": 0.0,
+        "llm_ms": 0.0
+      },
+      "recall": 0.0,
+      "citation_precision": 0.0,
+      "seed_hit": false
+    },
+    {
+      "question": "国际民航组织（ICAO）在2023年11月对北斗系统做了什么？",
+      "qtype": "relation",
+      "mode": "full",
+      "verification": "verified",
+      "quote_exact": false,
+      "latency_ms": 8582.7,
+      "timings": {
+        "retrieval_ms": 1580.2,
+        "sources_ms": 2.7,
+        "llm_ms": 6999.8
+      },
+      "recall": 1.0,
+      "citation_precision": 0.0,
+      "seed_hit": true
+    },
+    {
+      "question": "中国科学院成立于哪一年？",
+      "qtype": "single_hop",
+      "mode": "full",
+      "verification": "insufficient",
+      "quote_exact": true,
+      "latency_ms": 22863.5,
+      "timings": {
+        "retrieval_ms": 1094.1,
+        "sources_ms": 2.7,
+        "llm_ms": 21766.7
+      },
+      "recall": 1.0,
+      "citation_precision": 0.0,
+      "seed_hit": true
+    },
+    {
+      "question": "钱三强和丁瓒在1949年9月共同做了什么事情？",
+      "qtype": "relation",
+      "mode": "full",
+      "verification": "insufficient",
+      "quote_exact": true,
+      "latency_ms": 19453.5,
+      "timings": {
+        "retrieval_ms": 1391.3,
+        "sources_ms": 1.1,
+        "llm_ms": 18061.1
+      },
+      "recall": 1.0,
+      "citation_precision": 0.0,
+      "seed_hit": true
+    },
+    {
+      "question": "文艺复兴运动最早起源于哪个地区？",
+      "qtype": "single_hop",
+      "mode": "full",
+      "verification": "insufficient",
+      "quote_exact": true,
+      "latency_ms": 1252.8,
+      "timings": {
+        "retrieval_ms": 1252.8,
+        "sources_ms": 0.0,
+        "llm_ms": 0.0
+      },
+      "recall": 0.0,
+      "citation_precision": 0.0,
+      "seed_hit": false
+    },
+    {
+      "question": "文艺复兴与佛罗伦萨有什么关系？",
+      "qtype": "relation",
+      "mode": "full",
+      "verification": "partial",
+      "quote_exact": false,
+      "latency_ms": 290707.5,
+      "timings": {
+        "retrieval_ms": 1259.8,
+        "sources_ms": 1.8,
+        "llm_ms": 289445.9
+      },
+      "recall": 1.0,
+      "citation_precision": 0.3333333333333333,
+      "seed_hit": true
+    },
+    {
+      "question": "海洋学的研究内容是什么？",
+      "qtype": "single_hop",
+      "mode": "full",
+      "verification": "verified",
+      "quote_exact": false,
+      "latency_ms": 95485.7,
+      "timings": {
+        "retrieval_ms": 1732.8,
+        "sources_ms": 5.0,
+        "llm_ms": 93747.9
+      },
+      "recall": 1.0,
+      "citation_precision": 0.3333333333333333,
+      "seed_hit": true
+    },
+    {
+      "question": "威維爾·湯姆森和約翰·默里在挑戰者號遠征中的角色是什麼？",
+      "qtype": "relation",
+      "mode": "full",
+      "verification": "verified",
+      "quote_exact": false,
+      "latency_ms": 14981.5,
+      "timings": {
+        "retrieval_ms": 1673.3,
+        "sources_ms": 1.8,
+        "llm_ms": 13306.4
+      },
+      "recall": 1.0,
+      "citation_precision": 1.0,
+      "seed_hit": true
+    }
+  ],
+  "graph": {
+    "nodes": 6927,
+    "edges": 8462,
+    "node_types": {
+      "PERSON": 1098,
+      "TIME": 865,
+      "LOCATION": 1489,
+      "CONCEPT": 2093,
+      "EVENT": 293,
+      "ORG": 1089
+    },
+    "edge_relations": {
+      "AFFILIATED_WITH": 656,
+      "RELATED_TO": 3708,
+      "LOCATED_IN": 910,
+      "CREATED": 434,
+      "IN_PERIOD": 1374,
+      "MEMBER_OF": 596,
+      "PARTNERS_WITH": 45,
+      "USES": 225,
+      "AFFECTS": 293,
+      "FOUNDED_BY": 88,
+      "CAUSES": 64,
+      "INVENTED_BY": 36,
+      "PROPOSED_BY": 33
+    },
+    "built_at": "2026-11-04 05:00:06",
+    "graph_version": 53
+  }
+}
