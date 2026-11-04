@@ -7,7 +7,7 @@ PROJECT_DIR="$(pwd)"
 CONDA_BASE="$(conda info --base 2>/dev/null || echo /opt/anaconda3)"
 # shellcheck disable=SC1091
 source "$CONDA_BASE/etc/profile.d/conda.sh"
-conda activate langchain
+conda activate "${CONDA_ENV:-langchain}"
 export PYTHONPATH="$PROJECT_DIR/src"
 mkdir -p "$PROJECT_DIR/data/logs"
 

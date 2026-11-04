@@ -33,7 +33,7 @@ log() { echo -e "$1"; }
 CONDA_BASE="$(conda info --base 2>/dev/null || echo /opt/anaconda3)"
 # shellcheck disable=SC1091
 source "$CONDA_BASE/etc/profile.d/conda.sh"
-conda activate langchain
+conda activate "${CONDA_ENV:-langchain}"
 export PYTHONPATH="$SCRIPT_DIR/src"
 
 json_get() {
