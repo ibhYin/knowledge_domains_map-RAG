@@ -33,6 +33,10 @@ class Settings(BaseSettings):
     build_checkpoint_interval: int = Field(default=5, ge=1)
     build_publish_interval: float = Field(default=2.0, gt=0)
 
+    # 问答来源：相关性重排序开关与喂给模型的分块上限
+    source_rerank: bool = True
+    max_answer_sources: int = Field(default=40, ge=1)
+
     @property
     def documents_dir(self) -> Path:
         return self.data_dir / "documents"

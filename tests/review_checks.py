@@ -337,6 +337,39 @@ class ReviewChecks(unittest.TestCase):
         with self.assertRaises(QueryExtractionError):
             answer_with_evidence(fake, "问题", "", sources)
 
+    def test_rerank_orders_relevant_chunks_first_and_keeps_ids(self):
+        from graphrag.retrieval.rerank import rerank_sources
+
+        sources = [{"id": 1, "doc_id": "a", "content": "岳飞是南宋抗金名将。"},
+                   {"id": 2, "doc_id": "b", "content": "清华大学始建于1911年，因清华园得名。"},
+                   {"id": 3, "doc_id": "c", "content": "今天的天气很好。"}]
+        reranked = rerank_sources("清华大学始建于哪一年？", sources, entity_names=["清华大学"])
+        self.assertEqual([s["id"] for s in reranked][0], 2)
+        self.assertEqual(reranked[-1]["content"], "今天的天气很好。")
+        self.assertEqual(sorted(s["id"] for s in reranked), [1, 2, 3])  # 只重排不重编号
+        # 并列分稳定：与问题等距的两个来源保持原有相对顺序
+        tied = [{"id": 1, "doc_id": "a", "content": "完全无关甲。"},
+                {"id": 2, "doc_id": "b", "content": "完全无关乙。"}]
+        self.assertEqual([s["id"] for s in rerank_sources("毫不相干的问题", tied)], [1, 2])
+        # 空输入/空问题原序返回
+        self.assertEqual(rerank_sources("问题", []), [])
+        self.assertEqual([s["id"] for s in rerank_sources("", sources)], [1, 2, 3])
+
+    def test_answer_supplies_top_relevant_sources_within_limit(self):
+        from graphrag.retrieval.rerank import rerank_sources
+
+        sources = [{"id": 1, "doc_id": "a", "content": "岳飞是南宋抗金名将。"},
+                   {"id": 2, "doc_id": "b", "content": "今天的天气很好。"},
+                   {"id": 3, "doc_id": "c", "content": "清华大学始建于1911年，因清华园得名。"}]
+        settings.max_answer_sources = 2
+        self.addCleanup(setattr, settings, "max_answer_sources", 40)
+        fake = SimpleNamespace(invoke=Mock(side_effect=[AIMessage(content='{"sentences":[]}')]))
+        # service.answer 管线：先重排（不重编号），answer_with_evidence 截前 max_answer_sources
+        ordered = rerank_sources("清华大学始建于哪一年？", sources, entity_names=["清华大学"])
+        answer_with_evidence(fake, "清华大学始建于哪一年？", "", ordered)
+        supplied = json.loads(fake.invoke.call_args_list[0].args[0][1].content)["sources"]
+        self.assertEqual([s["id"] for s in supplied], [3, 1])  # 相关块排前入选，天气块被裁
+
     def test_history_keeps_evidence_snapshot_after_document_deletion(self):
         service = RagService()
         doc = service.ingest([("sample.txt", "清华大学是一所大学。".encode())])[0]

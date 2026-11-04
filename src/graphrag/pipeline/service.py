@@ -16,6 +16,7 @@ from graphrag.pipeline.chunk_store import ChunkStore, chunk_id_of, content_hash
 from graphrag.retrieval.context_formatter import format_subgraph_context
 from graphrag.retrieval.evidence import answer_with_evidence, collect_sources
 from graphrag.retrieval.graph_search import GraphSearch
+from graphrag.retrieval.rerank import rerank_sources
 from graphrag.splitting.text_splitter import split_documents
 
 logger = logging.getLogger(__name__)
@@ -153,7 +154,8 @@ class RagService:
 
         if subgraph.number_of_nodes() == 0:
             context = ""
-            timings = {"retrieval_ms": round((t1 - t0) * 1000, 1), "sources_ms": 0.0, "llm_ms": 0.0}
+            timings = {"retrieval_ms": round((t1 - t0) * 1000, 1), "sources_ms": 0.0,
+                       "rerank_ms": 0.0, "llm_ms": 0.0}
             grounded = {"answer": "图谱中没有检索到与问题相关的实体，无法回答。请尝试换个问法，或先上传文档并构建图谱。",
                         "sentences": [], "sources": [], "retrieved_sources": [], "used_docs": [], "verification": "insufficient"}
         else:
@@ -163,12 +165,23 @@ class RagService:
                 records = self.chunks.iter_chunks([d["doc_id"] for d in documents])
             sources = collect_sources(documents, records, subgraph, edges)
             t2 = time.perf_counter()
+            if settings.source_rerank:
+                # 重排不重新编号：引用校验与 history 快照语义不变；证据在库不在窗时前排命中
+                entity_names = [m["name"] for m in result["matched_entities"]]
+                entity_names += [m["query"] for m in result["matched_entities"]]
+                seed_cids: set[str] = set()
+                for m in result["matched_entities"]:
+                    node = store.G.nodes.get(m["node"])
+                    seed_cids.update(node.get("source_chunks", []) or [])
+                sources = rerank_sources(question, sources, entity_names, seed_cids)
+            t2r = time.perf_counter()
             llm = self._get_answer_llm()
             grounded = answer_with_evidence(llm, question, context, sources)
             t3 = time.perf_counter()
             timings = {"retrieval_ms": round((t1 - t0) * 1000, 1),
                        "sources_ms": round((t2 - t1) * 1000, 1),
-                       "llm_ms": round((t3 - t2) * 1000, 1)}
+                       "rerank_ms": round((t2r - t2) * 1000, 1),
+                       "llm_ms": round((t3 - t2r) * 1000, 1)}
         return {
             **grounded,
             "matched_entities": result["matched_entities"],
