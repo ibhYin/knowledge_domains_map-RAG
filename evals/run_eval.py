@@ -33,8 +33,12 @@ def percentile(values: list[float], p: float) -> float:
 
 
 def quote_check(result: dict) -> bool:
-    """独立复跑逐字引用校验：每个被引句的 quote 必须是对应来源分块的子串。"""
-    lookup = {s["chunk_id"]: s for s in result.get("sources", [])}
+    """独立复跑逐字引用校验：每个被引句的 quote 必须是对应来源分块的子串。
+
+    引用编号（source_id）是 collect_sources 分配的数字 id；此前误用 chunk_id
+    做查找键导致永远 miss、指标退化为"无引用答案占比"（2026-11-04 修复）。
+    """
+    lookup = {s["id"]: s for s in result.get("sources", [])}
     for sentence in result.get("sentences", []):
         for c in sentence.get("citations", []):
             src = lookup.get(c["source_id"])
